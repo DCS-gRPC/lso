@@ -1,0 +1,12 @@
+[package]
+name = "lso"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+chrono = "0.4"
+tacview = { path = "../tacview" }
+zip = "0.5"
+thiserror = "1.0"
+ultraviolet = { version = "0.6", features = [ "f64" ] }
+plotters = "0.3"
