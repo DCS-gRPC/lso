@@ -1,12 +1,25 @@
 [package]
 name = "lso"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
+backoff = { version = "0.3", features = ["tokio"] }
 chrono = "0.4"
-tacview = { path = "../tacview" }
-zip = "0.5"
-thiserror = "1.0"
-ultraviolet = { version = "0.6", features = [ "f64" ] }
+clap = "2.33"
+stubs = { package = "dcs-grpc-stubs", path = "../DCS-gRPC/rust-server/stubs", features = ["client"] }
+dotenv = "0.15"
+futures-util = "0.3"
+once_cell = "1.8"
 plotters = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+tacview = { path = "../tacview" }
+thiserror = "1.0"
+tokio =  { version = "1.2", features = ["rt-multi-thread", "macros", "signal", "fs"] }
+tonic = "0.6"
+tracing = "0.1"
+tracing-subscriber = "0.2"
+ultraviolet = { version = "0.6", features = [ "f64" ] }
+zip = "0.5"
+

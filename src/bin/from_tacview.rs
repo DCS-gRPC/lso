@@ -10,7 +10,6 @@ use plotters::coord::ranged1d::ValueFormatter;
 use plotters::coord::types::RangedCoordf64;
 use plotters::prelude::*;
 use tacview::record::{Coords, GlobalProperty, Property, Record, Tag};
-use tacview::TacviewParser;
 use ultraviolet::{DRotor3, DVec3};
 
 const THEME_BG: RGBColor = RGBColor(30, 41, 49);
@@ -34,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open(filename)?;
     let mut zip = zip::ZipArchive::new(file)?;
     let file = zip.by_index(0)?;
-    let parser = TacviewParser::new(file)?;
+    let parser = tacview::Parser::new(file)?;
 
     let mut reference_time: DateTime<FixedOffset> = Utc::now().into();
     let mut time = reference_time;
@@ -95,7 +94,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 draw_chart(track);
                             }
 
-                            return Ok(());
                             continue;
                         }
 
@@ -199,7 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // handle global properties
             Record::GlobalProperty(GlobalProperty::ReferenceTime(s)) => {
                 reference_time = DateTime::parse_from_rfc3339(&s)?;
-                time = reference_time.clone();
+                time = reference_time;
             }
 
             Record::Update(update) => {
@@ -245,9 +243,9 @@ fn m_to_ft(m: f64) -> f64 {
     m * 3.28084
 }
 
-fn ft_to_m(ft: f64) -> f64 {
-    ft / 3.28084
-}
+// fn ft_to_m(ft: f64) -> f64 {
+//     ft / 3.28084
+// }
 
 fn ft_to_nm(ft: f64) -> f64 {
     ft / 6076.118
