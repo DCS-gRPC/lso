@@ -4,10 +4,13 @@ use std::time::Duration;
 
 use backoff::ExponentialBackoff;
 use futures_util::future::{select, FutureExt};
+use futures_util::TryFutureExt;
+use stubs::coalition::coalition_service_client::CoalitionServiceClient;
+use stubs::group::group_service_client::GroupServiceClient;
 use stubs::hook::hook_service_client::HookServiceClient;
 use stubs::mission::mission_service_client::MissionServiceClient;
 use stubs::unit::unit_service_client::UnitServiceClient;
-use stubs::{hook, mission, unit, Coalition};
+use stubs::{coalition, group, hook, mission, unit, Coalition, GroupCategory};
 use tacview::record::{Color, Coords, GlobalProperty, Property, Tag, Update};
 use tonic::transport::{Channel, Endpoint};
 use tracing_subscriber::layer::{Layer, SubscriberExt};
@@ -52,6 +55,8 @@ async fn main() {
 }
 
 struct Services {
+    coalition: CoalitionServiceClient<Channel>,
+    group: GroupServiceClient<Channel>,
     hook: HookServiceClient<Channel>,
     mission: MissionServiceClient<Channel>,
     unit: UnitServiceClient<Channel>,
@@ -61,13 +66,16 @@ async fn run() -> Result<(), Error> {
     let addr = "http://127.0.0.1:50051"; // TODO: move to config
     tracing::debug!(endpoint = addr, "Connecting to gRPC server");
     let endpoint = Endpoint::from_static(addr).keep_alive_while_idle(true);
-    let mut services = Services {
+    let mut svc = Services {
+        coalition: CoalitionServiceClient::connect(endpoint.clone()).await?,
+        group: GroupServiceClient::connect(endpoint.clone()).await?,
         hook: HookServiceClient::connect(endpoint.clone()).await?,
         mission: MissionServiceClient::connect(endpoint.clone()).await?,
         unit: UnitServiceClient::connect(endpoint).await?,
     };
 
-    record_carrier_recovery(&mut services, "Mother", "F18").await?;
+    detect_recoveries(&mut svc).await?;
+    record_carrier_recovery(&mut svc, "Mother", "F18").await?;
 
     Ok(())
 }
@@ -149,6 +157,92 @@ async fn create_initial_update(
     }
 
     Ok(Update { id, props })
+}
+
+async fn detect_recoveries(svc: &mut Services) -> Result<(), Error> {
+    // initial full-sync of all current units inside of the mission
+    let groups = futures_util::future::try_join_all(
+        [Coalition::Blue, Coalition::Red, Coalition::Neutral].map(|coalition| {
+            let mut coalition_svc = svc.coalition.clone();
+            async move {
+                coalition_svc
+                    .get_groups(coalition::GetGroupsRequest {
+                        coalition: coalition.into(),
+                        category: None,
+                    })
+                    .map_ok(|res| res.into_inner().groups)
+                    .await
+            }
+        }),
+    )
+    .await?
+    .into_iter()
+    .flatten();
+
+    let group_units = futures_util::future::try_join_all(
+        groups
+            .into_iter()
+            .filter(|group| {
+                if let Some(category) = GroupCategory::from_i32(group.category) {
+                    matches!(
+                        category,
+                        GroupCategory::GroupAirplane | GroupCategory::GroupShip
+                    )
+                } else {
+                    false
+                }
+            })
+            .map(|group| {
+                let mut group_svc = svc.group.clone();
+                async move {
+                    let category = group.category;
+                    group_svc
+                        .get_units(group::GetUnitsRequest {
+                            group_name: group.name,
+                            active: Some(true),
+                        })
+                        .map_ok(|res| (category, res.into_inner().units))
+                        .await
+                }
+            }),
+    )
+    .await?;
+
+    let mut planes = Vec::new();
+    let mut carriers = Vec::new();
+
+    for (category, units) in group_units {
+        for unit in units {
+            match GroupCategory::from_i32(category) {
+                // TODO: only players
+                // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
+                Some(GroupCategory::GroupAirplane) => planes.push(unit.name),
+                Some(GroupCategory::GroupShip) => {
+                    let attrs = svc
+                        .unit
+                        .get_unit_descriptor(unit::GetUnitDescriptorRequest {
+                            name: unit.name.clone(),
+                        })
+                        .await?
+                        .into_inner()
+                        .attributes;
+
+                    if attrs
+                        .iter()
+                        .any(|a| a.as_str() == "AircraftCarrier With Arresting Gear")
+                    {
+                        carriers.push(unit.name)
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    dbg!(planes);
+    dbg!(carriers);
+
+    Ok(())
 }
 
 fn tags<I: AsRef<str>>(attrs: impl IntoIterator<Item = I>) -> HashSet<Tag> {
