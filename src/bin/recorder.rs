@@ -5,20 +5,24 @@ use std::time::Duration;
 use backoff::ExponentialBackoff;
 use futures_util::future::{select, FutureExt};
 use futures_util::TryFutureExt;
+use lso::{tasks, Shutdown};
 use stubs::coalition::coalition_service_client::CoalitionServiceClient;
+use stubs::common::{Coalition, GroupCategory};
 use stubs::group::group_service_client::GroupServiceClient;
 use stubs::hook::hook_service_client::HookServiceClient;
 use stubs::mission::mission_service_client::MissionServiceClient;
 use stubs::unit::unit_service_client::UnitServiceClient;
-use stubs::{coalition, group, hook, mission, unit, Coalition, GroupCategory};
+use stubs::{coalition, group, hook, mission, unit};
 use tacview::record::{Color, Coords, GlobalProperty, Property, Tag, Update};
 use tonic::transport::{Channel, Endpoint};
 use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
+use ultraviolet::DVec3;
 
 #[tokio::main]
 async fn main() {
-    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "recorder=trace".to_owned());
+    let filter =
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "recorder=trace,lso=trace".to_owned());
     let registry = tracing_subscriber::registry().with(
         tracing_subscriber::filter::EnvFilter::new(filter)
             .and_then(tracing_subscriber::fmt::layer()),
@@ -65,16 +69,19 @@ struct Services {
 async fn run() -> Result<(), Error> {
     let addr = "http://127.0.0.1:50051"; // TODO: move to config
     tracing::debug!(endpoint = addr, "Connecting to gRPC server");
-    let endpoint = Endpoint::from_static(addr).keep_alive_while_idle(true);
+    let channel = Endpoint::from_static(addr)
+        .keep_alive_while_idle(true)
+        .connect()
+        .await?;
     let mut svc = Services {
-        coalition: CoalitionServiceClient::connect(endpoint.clone()).await?,
-        group: GroupServiceClient::connect(endpoint.clone()).await?,
-        hook: HookServiceClient::connect(endpoint.clone()).await?,
-        mission: MissionServiceClient::connect(endpoint.clone()).await?,
-        unit: UnitServiceClient::connect(endpoint).await?,
+        coalition: CoalitionServiceClient::new(channel.clone()),
+        group: GroupServiceClient::new(channel.clone()),
+        hook: HookServiceClient::new(channel.clone()),
+        mission: MissionServiceClient::new(channel.clone()),
+        unit: UnitServiceClient::new(channel.clone()),
     };
 
-    detect_recoveries(&mut svc).await?;
+    detect_recoveries(&mut svc, channel).await?;
     record_carrier_recovery(&mut svc, "Mother", "F18").await?;
 
     Ok(())
@@ -122,7 +129,7 @@ async fn create_initial_update(
 ) -> Result<Update, Error> {
     let unit = svc
         .unit
-        .get_unit(unit::GetUnitRequest {
+        .get(unit::GetRequest {
             name: unit_name.to_string(),
         })
         .await?
@@ -137,7 +144,7 @@ async fn create_initial_update(
 
     let attrs = svc
         .unit
-        .get_unit_descriptor(unit::GetUnitDescriptorRequest {
+        .get_descriptor(unit::GetDescriptorRequest {
             name: unit_name.to_string(),
         })
         .await?
@@ -159,7 +166,7 @@ async fn create_initial_update(
     Ok(Update { id, props })
 }
 
-async fn detect_recoveries(svc: &mut Services) -> Result<(), Error> {
+async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error> {
     // initial full-sync of all current units inside of the mission
     let groups = futures_util::future::try_join_all(
         [Coalition::Blue, Coalition::Red, Coalition::Neutral].map(|coalition| {
@@ -184,10 +191,7 @@ async fn detect_recoveries(svc: &mut Services) -> Result<(), Error> {
             .into_iter()
             .filter(|group| {
                 if let Some(category) = GroupCategory::from_i32(group.category) {
-                    matches!(
-                        category,
-                        GroupCategory::GroupAirplane | GroupCategory::GroupShip
-                    )
+                    matches!(category, GroupCategory::Airplane | GroupCategory::Ship)
                 } else {
                     false
                 }
@@ -216,11 +220,11 @@ async fn detect_recoveries(svc: &mut Services) -> Result<(), Error> {
             match GroupCategory::from_i32(category) {
                 // TODO: only players
                 // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
-                Some(GroupCategory::GroupAirplane) => planes.push(unit.name),
-                Some(GroupCategory::GroupShip) => {
+                Some(GroupCategory::Airplane) => planes.push(unit.name),
+                Some(GroupCategory::Ship) => {
                     let attrs = svc
                         .unit
-                        .get_unit_descriptor(unit::GetUnitDescriptorRequest {
+                        .get_descriptor(unit::GetDescriptorRequest {
                             name: unit.name.clone(),
                         })
                         .await?
@@ -239,8 +243,23 @@ async fn detect_recoveries(svc: &mut Services) -> Result<(), Error> {
         }
     }
 
-    dbg!(planes);
-    dbg!(carriers);
+    dbg!(&planes);
+    dbg!(&carriers);
+
+    let shutdown = Shutdown::new();
+
+    for carrier_name in carriers {
+        for plane_name in &planes {
+            // TODO: retry, error handling, spawn
+            tasks::detect_recovery(
+                ch.clone(),
+                carrier_name.clone(),
+                plane_name.clone(),
+                shutdown.handle(),
+            )
+            .await?;
+        }
+    }
 
     Ok(())
 }

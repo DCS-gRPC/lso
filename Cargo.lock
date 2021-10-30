@@ -738,6 +738,7 @@ dependencies = [
  "dotenv",
  "futures-util",
  "once_cell",
+ "pin-project",
  "plotters",
  "serde",
  "serde_json",

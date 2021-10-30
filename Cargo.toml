@@ -16,10 +16,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 tacview = { path = "../tacview" }
 thiserror = "1.0"
-tokio =  { version = "1.2", features = ["rt-multi-thread", "macros", "signal", "fs"] }
+tokio =  { version = "1.2", features = ["rt-multi-thread", "macros", "signal", "fs", "sync"] }
 tonic = "0.6"
 tracing = "0.1"
 tracing-subscriber = "0.2"
 ultraviolet = { version = "0.6", features = [ "f64" ] }
 zip = "0.5"
+pin-project = "1.0"
 
