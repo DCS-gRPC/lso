@@ -4,10 +4,8 @@ use futures_util::StreamExt;
 use tonic::{transport::Channel, Status};
 use ultraviolet::DVec3;
 
-use crate::{
-    client::UnitClient,
-    utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle},
-};
+use crate::client::UnitClient;
+use crate::utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle};
 
 #[tracing::instrument(skip(ch, shutdown))]
 pub async fn detect_recovery(
@@ -58,7 +56,6 @@ pub async fn detect_recovery(
 
         // Does the nose of the plane roughly point towards the carrier?
         let dot = plane.velocity.normalized().dot(ray_from_plane_to_carrier);
-        dbg!(dot);
         if dot < 0.65 {
             tracing::trace!(dot, "ignore not roughly pointing towards the carrier");
             continue;

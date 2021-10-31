@@ -17,7 +17,6 @@ use tacview::record::{Color, Coords, GlobalProperty, Property, Tag, Update};
 use tonic::transport::{Channel, Endpoint};
 use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
-use ultraviolet::DVec3;
 
 #[tokio::main]
 async fn main() {

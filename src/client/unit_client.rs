@@ -1,7 +1,5 @@
-use stubs::{
-    common,
-    unit::{self, unit_service_client::UnitServiceClient},
-};
+use stubs::common::Unit;
+use stubs::unit::{self, unit_service_client::UnitServiceClient};
 use tonic::{transport::Channel, Status};
 use ultraviolet::DVec3;
 
@@ -45,6 +43,33 @@ impl UnitClient {
             roll: orientation.roll,
             time: res.time,
         })
+    }
+
+    pub async fn get_unit(&mut self, unit_name: &str) -> Result<Unit, Status> {
+        let unit = self
+            .svc
+            .get(unit::GetRequest {
+                name: unit_name.to_string(),
+            })
+            .await?
+            .into_inner()
+            .unit
+            .ok_or_else(|| {
+                Status::not_found(format!("received empty response for unit `{}`", unit_name))
+            })?;
+        Ok(unit)
+    }
+
+    pub async fn get_descriptor(&mut self, unit_name: &str) -> Result<Vec<String>, Status> {
+        let descriptor = self
+            .svc
+            .get_descriptor(unit::GetDescriptorRequest {
+                name: unit_name.to_string(),
+            })
+            .await?
+            .into_inner()
+            .attributes;
+        Ok(descriptor)
     }
 }
 
