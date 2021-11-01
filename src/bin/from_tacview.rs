@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         // TODO: don't re-calc everytime
                         let mut landing_pos_offset =
-                            data::NIMITZ.optimal_landing_offset(&data::FA18C, 3.5);
+                            data::NIMITZ.optimal_landing_offset(&data::FA18C);
                         let carrier_rot =
                             DRotor3::from_rotation_xz((carrier.yaw).neg().to_radians());
                         landing_pos_offset.rotate_by(carrier_rot);

@@ -73,12 +73,12 @@ pub const NIMITZ: CarrierInfo = CarrierInfo {
 };
 
 pub static FA18C: AirplaneInfo = AirplaneInfo {
-    // hook_pooint
     hook: DVec3 {
         x: 0.0,
         y: -2.240897,
         z: -7.237348,
     },
+    glide_slope: 3.5,
 };
 
 pub struct CarrierInfo {
@@ -94,22 +94,24 @@ pub struct CarrierInfo {
 }
 
 impl CarrierInfo {
-    /// Calculate the offset from the origin where the optimal gliddepath hits the deck.
-    pub fn optimal_landing_offset(&self, plane: &AirplaneInfo, glide_slope: f64) -> DVec3 {
+    /// Calculate the offset from the origin where the optimal glide path hits the deck.
+    pub fn optimal_landing_offset(&self, plane: &AirplaneInfo) -> DVec3 {
         // optimal hook touchdown point is halfway between the second and third cable
         // (according to NAVAIR 00-80T-104 4.2.8)
         let touchdown_at = (self.cable2.0 - self.cable3.1) / 2.0;
         let touchdown_at = self.cable3.1 + touchdown_at;
 
-        let hook_offset = plane
-            .hook
-            .rotated_by(DRotor3::from_rotation_yz(glide_slope.to_radians().neg()));
+        let hook_offset = plane.hook.rotated_by(DRotor3::from_rotation_yz(
+            plane.glide_slope.to_radians().neg(),
+        ));
 
         touchdown_at - hook_offset
     }
 }
 
 pub struct AirplaneInfo {
-    /// Hook position relative to the object's orign.
+    /// Hook position relative to the object's origin.
     hook: DVec3,
+    /// The optimal glide slope in degrees.
+    glide_slope: f64,
 }

@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use tonic::{transport::Channel, Status};
-use ultraviolet::DVec3;
 
 use crate::client::UnitClient;
 use crate::utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle};
@@ -14,12 +13,16 @@ pub async fn detect_recovery(
     plane_name: String,
     shutdown: ShutdownHandle,
 ) -> Result<(), Status> {
-    let mut client = UnitClient::new(ch);
-    let mut interval = crate::utils::interval::interval(Duration::from_secs(2), shutdown);
+    let mut client1 = UnitClient::new(ch.clone());
+    let mut client2 = UnitClient::new(ch.clone());
+    let mut interval = crate::utils::interval::interval(Duration::from_secs(2), shutdown.clone());
 
     while interval.next().await.is_some() {
-        let carrier = client.get_transform(&carrier_name).await?;
-        let plane = client.get_transform(&plane_name).await?;
+        let (carrier, plane) = futures_util::future::try_join(
+            client1.get_transform(&carrier_name),
+            client2.get_transform(&plane_name),
+        )
+        .await?;
 
         // dbg!(&carrier);
         // dbg!(&plane);
@@ -30,11 +33,7 @@ pub async fn detect_recovery(
             continue;
         }
 
-        let mut ray_from_plane_to_carrier = DVec3::new(
-            carrier.u - plane.u,
-            carrier.alt - plane.alt,
-            carrier.v - plane.v,
-        );
+        let mut ray_from_plane_to_carrier = carrier.position - plane.position;
         let distance = ray_from_plane_to_carrier.mag();
 
         // ignore planes farther away than 1.5nm
@@ -71,8 +70,7 @@ pub async fn detect_recovery(
         break;
     }
 
+    super::record_recovery(ch, carrier_name, plane_name, shutdown).await?;
+
     Ok(())
 }
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {}

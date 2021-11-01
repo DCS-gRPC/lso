@@ -33,11 +33,11 @@ impl UnitClient {
         Ok(Transform {
             forward: DVec3::new(forward.x, forward.y, forward.z),
             velocity: DVec3::new(velocity.x, velocity.y, velocity.z),
+            position: DVec3::new(position.u, position.alt, position.v),
+            heading: res.heading,
             lat: position.lat,
             lon: position.lon,
             alt: position.alt,
-            u: position.u,
-            v: position.v,
             yaw: orientation.yaw,
             pitch: orientation.pitch,
             roll: orientation.roll,
@@ -77,11 +77,11 @@ impl UnitClient {
 pub struct Transform {
     pub forward: DVec3,
     pub velocity: DVec3,
+    pub position: DVec3,
+    pub heading: f64,
     pub lat: f64,
     pub lon: f64,
     pub alt: f64,
-    pub u: f64,
-    pub v: f64,
     // Yaw in degrees.
     pub yaw: f64,
     // Pitch in degrees.

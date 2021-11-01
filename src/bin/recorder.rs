@@ -81,7 +81,7 @@ async fn run() -> Result<(), Error> {
     };
 
     detect_recoveries(&mut svc, channel).await?;
-    record_carrier_recovery(&mut svc, "Mother", "F18").await?;
+    // record_carrier_recovery(&mut svc, "Mother", "F18").await?;
 
     Ok(())
 }
@@ -152,7 +152,7 @@ async fn create_initial_update(
 
     let coalition = Coalition::from_i32(unit.coalition).unwrap_or(Coalition::Neutral);
     let mut props = vec![
-        Property::T(Coords::default().lat(pos.lat).lon(pos.lon).alt(pos.alt)),
+        Property::T(Coords::default().position(pos.lat, pos.lon, pos.alt)),
         Property::Type(tags(&attrs)),
         Property::Name(unit.r#type),
         Property::Group(unit.group_name),
