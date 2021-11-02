@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-use std::fs::File;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
@@ -9,11 +7,8 @@ use lso::{tasks, Shutdown};
 use stubs::coalition::coalition_service_client::CoalitionServiceClient;
 use stubs::common::{Coalition, GroupCategory};
 use stubs::group::group_service_client::GroupServiceClient;
-use stubs::hook::hook_service_client::HookServiceClient;
-use stubs::mission::mission_service_client::MissionServiceClient;
 use stubs::unit::unit_service_client::UnitServiceClient;
-use stubs::{coalition, group, hook, mission, unit};
-use tacview::record::{Color, Coords, GlobalProperty, Property, Tag, Update};
+use stubs::{coalition, group, unit};
 use tonic::transport::{Channel, Endpoint};
 use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
@@ -60,8 +55,6 @@ async fn main() {
 struct Services {
     coalition: CoalitionServiceClient<Channel>,
     group: GroupServiceClient<Channel>,
-    hook: HookServiceClient<Channel>,
-    mission: MissionServiceClient<Channel>,
     unit: UnitServiceClient<Channel>,
 }
 
@@ -75,94 +68,12 @@ async fn run() -> Result<(), Error> {
     let mut svc = Services {
         coalition: CoalitionServiceClient::new(channel.clone()),
         group: GroupServiceClient::new(channel.clone()),
-        hook: HookServiceClient::new(channel.clone()),
-        mission: MissionServiceClient::new(channel.clone()),
         unit: UnitServiceClient::new(channel.clone()),
     };
 
     detect_recoveries(&mut svc, channel).await?;
-    // record_carrier_recovery(&mut svc, "Mother", "F18").await?;
 
     Ok(())
-}
-
-async fn record_carrier_recovery(
-    svc: &mut Services,
-    carrier_name: &str,
-    aircraft_name: &str,
-) -> Result<(), Error> {
-    let file = File::create("./test.txt.acmi")?;
-    let mut recording = tacview::Writer::new(file)?;
-
-    let reference_time = svc
-        .mission
-        .get_scenario_start_time(mission::GetScenarioStartTimeRequest {})
-        .await?
-        .into_inner();
-    recording.write(GlobalProperty::ReferenceTime(reference_time.datetime))?;
-
-    let mission_name = svc
-        .hook
-        .get_mission_name(hook::GetMissionNameRequest {})
-        .await?
-        .into_inner();
-    recording.write(GlobalProperty::Title(format!(
-        "Carrier Recovery during {}",
-        mission_name.name
-    )))?;
-    recording.write(GlobalProperty::Author(format!(
-        "dcs-grpc-lso v{}",
-        env!("CARGO_PKG_VERSION")
-    )))?;
-
-    recording.write(create_initial_update(svc, 1, carrier_name).await?)?;
-    recording.write(create_initial_update(svc, 2, aircraft_name).await?)?;
-
-    Ok(())
-}
-
-async fn create_initial_update(
-    svc: &mut Services,
-    id: u64,
-    unit_name: &str,
-) -> Result<Update, Error> {
-    let unit = svc
-        .unit
-        .get(unit::GetRequest {
-            name: unit_name.to_string(),
-        })
-        .await?
-        .into_inner()
-        .unit
-        .ok_or_else(|| Error::MissingUnit(unit_name.to_string()))?;
-
-    let pos = unit
-        .position
-        .as_ref()
-        .ok_or(Error::MissingProperty("position"))?;
-
-    let attrs = svc
-        .unit
-        .get_descriptor(unit::GetDescriptorRequest {
-            name: unit_name.to_string(),
-        })
-        .await?
-        .into_inner()
-        .attributes;
-
-    let coalition = Coalition::from_i32(unit.coalition).unwrap_or(Coalition::Neutral);
-    let mut props = vec![
-        Property::T(Coords::default().position(pos.lat, pos.lon, pos.alt)),
-        Property::Type(tags(&attrs)),
-        Property::Name(unit.r#type),
-        Property::Group(unit.group_name),
-        Property::Color(color(coalition)),
-    ];
-    if let Some(player_name) = &unit.player_name {
-        props.push(Property::Pilot(player_name.to_string()))
-    }
-
-    Ok(Update { id, props })
 }
 
 async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error> {
@@ -242,9 +153,6 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
         }
     }
 
-    dbg!(&planes);
-    dbg!(&carriers);
-
     let shutdown = Shutdown::new();
 
     for carrier_name in carriers {
@@ -261,37 +169,6 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
     }
 
     Ok(())
-}
-
-fn tags<I: AsRef<str>>(attrs: impl IntoIterator<Item = I>) -> HashSet<Tag> {
-    let mut tags = HashSet::with_capacity(2);
-    for attr in attrs.into_iter() {
-        match attr.as_ref() {
-            "Ships" => {
-                tags.insert(Tag::Sea);
-                tags.insert(Tag::Watercraft);
-            }
-            "AircraftCarrier" => {
-                tags.insert(Tag::AircraftCarrier);
-            }
-            "Air" => {
-                tags.insert(Tag::Air);
-            }
-            "Planes" => {
-                tags.insert(Tag::FixedWing);
-            }
-            _ => {}
-        }
-    }
-    tags
-}
-
-fn color(coalition: Coalition) -> Color {
-    match coalition {
-        Coalition::Neutral => Color::Grey,
-        Coalition::Red => Color::Red,
-        Coalition::Blue => Color::Blue,
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

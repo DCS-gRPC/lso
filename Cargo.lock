@@ -732,7 +732,6 @@ name = "lso"
 version = "0.1.0"
 dependencies = [
  "backoff",
- "chrono",
  "clap",
  "dcs-grpc-stubs",
  "dotenv",

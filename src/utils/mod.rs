@@ -16,3 +16,7 @@ pub fn m_to_ft(m: f64) -> f64 {
 pub fn ft_to_m(ft: f64) -> f64 {
     ft / 3.28084
 }
+
+pub fn ft_to_nm(ft: f64) -> f64 {
+    ft / 6076.118
+}

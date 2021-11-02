@@ -3,6 +3,8 @@ use stubs::unit::{self, unit_service_client::UnitServiceClient};
 use tonic::{transport::Channel, Status};
 use ultraviolet::DVec3;
 
+use crate::transform::Transform;
+
 pub struct UnitClient {
     svc: UnitServiceClient<Channel>,
 }
@@ -29,11 +31,16 @@ impl UnitClient {
         let position = res.position.unwrap_or_default();
         let orientation = res.orientation.unwrap_or_default();
         let forward = orientation.forward.unwrap_or_default();
+        let forward = DVec3::new(forward.x, forward.y, forward.z);
+
         let velocity = res.velocity.unwrap_or_default();
+        let velocity = DVec3::new(velocity.x, velocity.y, velocity.z);
+        let aoa = forward.dot(velocity.normalized()).acos().to_degrees();
+
         Ok(Transform {
-            forward: DVec3::new(forward.x, forward.y, forward.z),
-            velocity: DVec3::new(velocity.x, velocity.y, velocity.z),
-            position: DVec3::new(position.u, position.alt, position.v),
+            forward,
+            velocity,
+            position: DVec3::new(res.u, position.alt, res.v),
             heading: res.heading,
             lat: position.lat,
             lon: position.lon,
@@ -41,6 +48,7 @@ impl UnitClient {
             yaw: orientation.yaw,
             pitch: orientation.pitch,
             roll: orientation.roll,
+            aoa,
             time: res.time,
         })
     }
@@ -71,23 +79,4 @@ impl UnitClient {
             .attributes;
         Ok(descriptor)
     }
-}
-
-#[derive(Debug)]
-pub struct Transform {
-    pub forward: DVec3,
-    pub velocity: DVec3,
-    pub position: DVec3,
-    pub heading: f64,
-    pub lat: f64,
-    pub lon: f64,
-    pub alt: f64,
-    // Yaw in degrees.
-    pub yaw: f64,
-    // Pitch in degrees.
-    pub pitch: f64,
-    // Roll in degrees.
-    pub roll: f64,
-    /// Time in seconds since the scenario started.
-    pub time: f64,
 }
