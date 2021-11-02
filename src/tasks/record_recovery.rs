@@ -47,13 +47,15 @@ pub async fn record_recovery(
         "dcs-grpc-lso v{}",
         env!("CARGO_PKG_VERSION")
     )))?;
-    // let lat_ref = 35;
-    // let lon_ref = 35;
-    // recording.write(GlobalProperty::ReferenceLatitude(lat_ref))?;
-    // recording.write(GlobalProperty::ReferenceLongitude(lon_ref))?;
+    let mut ref_written = false;
+    let mut lat_ref = 0.0;
+    let mut lon_ref = 0.0;
 
     recording.write(create_initial_update(&mut client1, 1, &carrier_name).await?)?;
     recording.write(create_initial_update(&mut client1, 2, &plane_name).await?)?;
+
+    let mut known_carrier_coords = None;
+    let mut known_plane_coords = None;
 
     while interval.next().await.is_some() {
         let (carrier, plane) = futures_util::future::try_join(
@@ -62,26 +64,36 @@ pub async fn record_recovery(
         )
         .await?;
 
+        if !ref_written {
+            lat_ref = carrier.lat;
+            lon_ref = carrier.lon;
+            recording.write(GlobalProperty::ReferenceLatitude(lat_ref))?;
+            recording.write(GlobalProperty::ReferenceLongitude(lon_ref))?;
+            ref_written = true;
+        }
+
         let carrier_update = Update {
             id: 1,
-            props: vec![Property::T(
+            props: vec![Property::T(remove_unchanged(
                 Coords::default()
-                    .position(carrier.lat, carrier.lon, carrier.alt)
+                    .position(carrier.lat - lat_ref, carrier.lon - lon_ref, carrier.alt)
                     .uv(carrier.position.x, carrier.position.z)
                     .orientation(carrier.yaw, carrier.pitch, carrier.roll)
                     .heading(carrier.heading),
-            )],
+                &mut known_carrier_coords,
+            ))],
         };
         let plane_update = Update {
             id: 2,
             props: vec![
-                Property::T(
+                Property::T(remove_unchanged(
                     Coords::default()
-                        .position(plane.lat, plane.lon, plane.alt)
+                        .position(plane.lat - lat_ref, plane.lon - lon_ref, plane.alt)
                         .uv(plane.position.x, plane.position.z)
                         .orientation(plane.yaw, plane.pitch, plane.roll)
                         .heading(plane.heading),
-                ),
+                    &mut known_plane_coords,
+                )),
                 Property::AOA(plane.aoa),
             ],
         };
@@ -228,5 +240,75 @@ fn color(coalition: Coalition) -> Color {
         Coalition::Neutral => Color::Grey,
         Coalition::Red => Color::Red,
         Coalition::Blue => Color::Blue,
+    }
+}
+
+fn remove_unchanged(mut coords: Coords, known: &mut Option<Coords>) -> Coords {
+    if let Some(known) = known {
+        if changed_precision(coords.longitude, known.longitude, 0.0000001) {
+            known.longitude = coords.longitude;
+        } else {
+            coords.longitude = None;
+        }
+
+        if changed_precision(coords.latitude, known.latitude, 0.0000001) {
+            known.latitude = coords.latitude;
+        } else {
+            coords.latitude = None;
+        }
+
+        if changed_precision(coords.altitude, known.altitude, 0.01) {
+            known.altitude = coords.altitude;
+        } else {
+            coords.altitude = None;
+        }
+
+        if changed_precision(coords.u, known.u, 0.01) {
+            known.u = coords.u;
+        } else {
+            coords.u = None;
+        }
+
+        if changed_precision(coords.v, known.v, 0.01) {
+            known.v = coords.v;
+        } else {
+            coords.v = None;
+        }
+
+        if changed_precision(coords.roll, known.roll, 0.1) {
+            known.roll = coords.roll;
+        } else {
+            coords.roll = None;
+        }
+
+        if changed_precision(coords.pitch, known.pitch, 0.1) {
+            known.pitch = coords.pitch;
+        } else {
+            coords.pitch = None;
+        }
+
+        if changed_precision(coords.yaw, known.yaw, 0.1) {
+            known.yaw = coords.yaw;
+        } else {
+            coords.yaw = None;
+        }
+
+        if changed_precision(coords.heading, known.heading, 0.1) {
+            known.heading = coords.heading;
+        } else {
+            coords.heading = None;
+        }
+    } else {
+        *known = Some(coords.clone());
+    }
+
+    coords
+}
+
+fn changed_precision(a: Option<f64>, b: Option<f64>, theta: f64) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => (a - b).abs() >= theta,
+        (None, None) => false,
+        _ => true,
     }
 }
