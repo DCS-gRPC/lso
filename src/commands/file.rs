@@ -1,31 +1,24 @@
 use std::collections::HashSet;
 use std::fs::File;
+use std::path::PathBuf;
 use std::time::Instant;
 
-use lso::draw::Datum;
-use lso::tasks::calculate_datum;
-use lso::tasks::is_recovery_attempt;
-use lso::transform::Transform;
+use crate::draw::Datum;
+use crate::tasks::detect_recovery::is_recovery_attempt;
+use crate::tasks::record_recovery::calculate_datum;
+use crate::transform::Transform;
 use tacview::record::{Property, Record, Tag, Update};
-use tracing_subscriber::layer::{Layer, SubscriberExt};
-use tracing_subscriber::util::SubscriberInitExt;
 use ultraviolet::DVec3;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let filter =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "from_tacview=trace,lso=trace".to_owned());
-    let registry = tracing_subscriber::registry().with(
-        tracing_subscriber::filter::EnvFilter::new(filter)
-            .and_then(tracing_subscriber::fmt::layer()),
-    );
-    registry.init();
+#[derive(clap::Parser)]
+pub struct Opts {
+    input: PathBuf,
+}
 
-    // let filename = std::env::args().nth(1).expect("missing filename");
-    let filename = "test.txt.acmi";
-
+pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
-    let file = File::open(filename)?;
+    let file = File::open(opts.input)?;
     let parser = tacview::Parser::new(file)?;
 
     let mut carriers: HashSet<u64> = HashSet::new();
@@ -206,7 +199,7 @@ impl Track {
 
     fn draw(&mut self) {
         if self.is_recovery_attempt {
-            lso::draw::draw_chart(std::mem::take(&mut self.datums));
+            crate::draw::draw_chart(std::mem::take(&mut self.datums));
             self.is_recovery_attempt = false;
         }
     }

@@ -1,9 +1,9 @@
 use std::time::Duration;
 
+use crate::utils::shutdown::Shutdown;
 use backoff::ExponentialBackoff;
 use futures_util::future::{select, FutureExt};
 use futures_util::TryFutureExt;
-use lso::{tasks, Shutdown};
 use stubs::coalition::coalition_service_client::CoalitionServiceClient;
 use stubs::common::{Coalition, GroupCategory};
 use stubs::group::group_service_client::GroupServiceClient;
@@ -13,8 +13,11 @@ use tonic::transport::{Channel, Endpoint};
 use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
 
-#[tokio::main]
-async fn main() {
+/// A subcommand for controlling testing
+#[derive(clap::Parser)]
+pub struct Opts {}
+
+pub async fn execute(_opts: Opts) {
     let filter =
         std::env::var("RUST_LOG").unwrap_or_else(|_| "recorder=trace,lso=trace".to_owned());
     let registry = tracing_subscriber::registry().with(
@@ -158,7 +161,7 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
     for carrier_name in carriers {
         for plane_name in &planes {
             // TODO: retry, error handling, spawn
-            tasks::detect_recovery(
+            crate::tasks::detect_recovery::detect_recovery(
                 ch.clone(),
                 carrier_name.clone(),
                 plane_name.clone(),
@@ -177,14 +180,8 @@ pub enum Error {
     Grpc(#[from] tonic::Status),
     #[error(transparent)]
     Transport(#[from] tonic::transport::Error),
-    #[error("event stream ended")]
-    End,
     #[error(transparent)]
     Fmt(#[from] std::fmt::Error),
     #[error("failed to write ACMI file")]
     Write(#[from] std::io::Error),
-    #[error("expected property `{0}` was missing")]
-    MissingProperty(&'static str),
-    #[error("unit `{0}` does not exist")]
-    MissingUnit(String),
 }

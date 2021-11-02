@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 backoff = { version = "0.3", features = ["tokio"] }
-clap = "2.33"
+clap = "3.0.0-beta.5"
 stubs = { package = "dcs-grpc-stubs", path = "../DCS-gRPC/rust-server/stubs", features = ["client"] }
 dotenv = "0.15"
 futures-util = "0.3"

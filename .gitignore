@@ -1,1 +1,6 @@
+.*
+!.gitignore
 /target
+test*
+Tacview*
+notes*

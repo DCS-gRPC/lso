@@ -30,7 +30,7 @@ pub async fn detect_recovery(
         }
     }
 
-    super::record_recovery(ch, carrier_name, plane_name, shutdown).await?;
+    super::record_recovery::record_recovery(ch, carrier_name, plane_name, shutdown).await?;
 
     Ok(())
 }
