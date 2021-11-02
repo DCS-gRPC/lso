@@ -111,7 +111,7 @@ impl CarrierInfo {
 
 pub struct AirplaneInfo {
     /// Hook position relative to the object's origin.
-    hook: DVec3,
+    pub hook: DVec3,
     /// The optimal glide slope in degrees.
-    glide_slope: f64,
+    pub glide_slope: f64,
 }

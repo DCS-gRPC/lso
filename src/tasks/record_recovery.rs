@@ -139,11 +139,11 @@ pub fn calculate_datum(carrier: &Transform, plane: &Transform) -> Option<Datum> 
         landing_pos.z - plane.position.z,
     );
 
-    // stop tracking
+    let distance = ray_from_plane_to_carrier.mag();
     let fb = DVec3::unit_z().rotated_by(carrier_rot);
     let dot = ray_from_plane_to_carrier.dot(fb);
-    if dot < 0.0 {
-        tracing::trace!(dot, "stop tracking");
+    if dot < 0.0 && distance > 10.0 {
+        tracing::trace!(dot, distance_in_m = distance, "stop tracking");
         return None;
     }
 
@@ -156,7 +156,6 @@ pub fn calculate_datum(carrier: &Transform, plane: &Transform) -> Option<Datum> 
     );
     let fb = DVec3::unit_z().rotated_by(fb_rot);
 
-    let distance = ray_from_plane_to_carrier.mag();
     let x = ray_from_plane_to_carrier.dot(fb);
     let mut y = (distance.powi(2) - x.powi(2)).sqrt();
 
@@ -166,11 +165,16 @@ pub fn calculate_datum(carrier: &Transform, plane: &Transform) -> Option<Datum> 
         y = y.neg();
     }
 
+    // calculate altitude of the hook
+    let hook_offset = data::FA18C
+        .hook
+        .rotated_by(DRotor3::from_rotation_yz(plane.pitch.to_radians().neg()));
+
     Some(Datum {
         x,
         y,
         aoa: plane.aoa,
-        alt: plane.alt - data::NIMITZ.deck_altitude,
+        alt: plane.alt - data::NIMITZ.deck_altitude + hook_offset.y,
     })
 }
 

@@ -5,7 +5,8 @@ use plotters::coord::ranged1d::ValueFormatter;
 use plotters::coord::types::RangedCoordf64;
 use plotters::prelude::*;
 
-use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_m};
+use crate::data;
+use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft};
 
 const THEME_BG: RGBColor = RGBColor(30, 41, 49);
 const THEME_FG: RGBColor = RGBColor(203, 213, 225);
@@ -187,27 +188,24 @@ pub fn draw_chart(track: Vec<Datum>) {
 
     // draw centerline
     let lines = [
-        (3.5f64 - 0.9, THEME_GUIDE_RED),
-        (3.5f64 - 0.6, THEME_GUIDE_YELLOW),
-        (3.5f64 - 0.25, THEME_GUIDE_GREEN),
-        (3.5f64, THEME_GUIDE_GRAY),
-        (3.5f64 + 0.25, THEME_GUIDE_GREEN),
-        (3.5f64 + 0.7, THEME_GUIDE_YELLOW),
-        (3.5f64 + 1.5, THEME_GUIDE_RED),
+        (data::FA18C.glide_slope - 0.9, THEME_GUIDE_RED),
+        (data::FA18C.glide_slope - 0.6, THEME_GUIDE_YELLOW),
+        (data::FA18C.glide_slope - 0.25, THEME_GUIDE_GREEN),
+        (data::FA18C.glide_slope, THEME_GUIDE_GRAY),
+        (data::FA18C.glide_slope + 0.25, THEME_GUIDE_GREEN),
+        (data::FA18C.glide_slope + 0.7, THEME_GUIDE_YELLOW),
+        (data::FA18C.glide_slope + 1.5, THEME_GUIDE_RED),
     ];
 
     for (deg, color) in lines {
         let mut x = SIDE_RANGE_X.end;
-        let mut y = deg.to_radians().tan() * m_to_ft(nm_to_m(SIDE_RANGE_X.end));
+        let mut y = nm_to_ft(deg.to_radians().tan() * SIDE_RANGE_X.end);
         if y > SIDE_RANGE_Y.end {
             x = ft_to_nm(SIDE_RANGE_Y.end) / deg.to_radians().tan();
             y = SIDE_RANGE_Y.end;
         }
         chart
-            .draw_series(LineSeries::new(
-                [(SIDE_RANGE_X.start, SIDE_RANGE_Y.start), (x, y)],
-                color.mix(0.4),
-            ))
+            .draw_series(LineSeries::new([(0.0, 0.0), (x, y)], color.mix(0.4)))
             .unwrap();
     }
 
