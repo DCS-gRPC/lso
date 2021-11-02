@@ -1,4 +1,4 @@
-use std::ops::Neg;
+use std::ops::{Neg, Range};
 
 use plotters::coord::combinators::WithKeyPoints;
 use plotters::coord::ranged1d::ValueFormatter;
@@ -29,18 +29,39 @@ pub struct Datum {
 
 #[tracing::instrument(skip_all)]
 pub fn draw_chart(track: Vec<Datum>) {
-    let root_drawing_area = SVGBackend::new("test.svg", (1200, 800 + 500)).into_drawing_area();
-    let (top, bottom) = root_drawing_area.split_vertically(800);
+    const WIDTH: u32 = 1000;
+    const X_LABEL_AREA_SIZE: u32 = 30;
+    const TOP_RANGE_X: Range<f64> = 0.0..1.1;
+    const TOP_RANGE_Y: Range<f64> = -0.25..0.15;
+    const SIDE_RANGE_X: Range<f64> = TOP_RANGE_X;
+    const SIDE_RANGE_Y: Range<f64> = 0.0..500.0;
+
+    let top_height = (((TOP_RANGE_Y.end - TOP_RANGE_Y.start)
+        / (TOP_RANGE_X.end - TOP_RANGE_X.start))
+        * (WIDTH as f64))
+        .floor() as u32;
+
+    let side_height = ((ft_to_nm(SIDE_RANGE_Y.end - SIDE_RANGE_Y.start) * 5.0
+        / (SIDE_RANGE_X.end - SIDE_RANGE_X.start))
+        * (WIDTH as f64))
+        .floor() as u32;
+
+    let root_drawing_area = SVGBackend::new(
+        "test.svg",
+        (WIDTH, top_height + side_height + X_LABEL_AREA_SIZE),
+    )
+    .into_drawing_area();
+    let (top, bottom) = root_drawing_area.split_vertically(top_height);
 
     top.fill(&THEME_BG).unwrap();
 
     let mut chart = ChartBuilder::on(&top)
         .margin(5)
-        .x_label_area_size(100)
-        .y_label_area_size(100)
+        .x_label_area_size(0)
+        .y_label_area_size(0)
         .build_cartesian_2d(
-            CustomRange((0.0f64..1.5f64).with_key_points(vec![0.25f64, 0.75, 1.0])),
-            -0.5f64..0.5f64,
+            CustomRange(TOP_RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
+            TOP_RANGE_Y,
         )
         .unwrap();
 
@@ -48,6 +69,7 @@ pub fn draw_chart(track: Vec<Datum>) {
     chart
         .configure_mesh()
         .disable_mesh()
+        .disable_x_axis()
         .disable_y_axis()
         .axis_style(THEME_FG)
         .x_label_style(TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG))
@@ -67,22 +89,35 @@ pub fn draw_chart(track: Vec<Datum>) {
     ];
 
     for (deg, color) in lines {
-        let y = deg.to_radians().tan() * 1.5;
+        let y = deg.to_radians().tan() * TOP_RANGE_X.end;
         chart
-            .draw_series(LineSeries::new([(0.0, 0.0), (1.5, y)], color.mix(0.4)))
+            .draw_series(LineSeries::new(
+                [(0.0, 0.0), (TOP_RANGE_X.end, y)],
+                color.mix(0.4),
+            ))
             .unwrap();
         chart
             .draw_series(LineSeries::new(
-                [(0.0, 0.0), (1.5, y.neg())],
+                [(0.0, 0.0), (TOP_RANGE_X.end, y.neg())],
                 color.mix(0.4),
             ))
             .unwrap();
     }
 
+    let track_in_nm = track
+        .iter()
+        .map(|d| Datum {
+            x: m_to_nm(d.x),
+            y: m_to_nm(d.y),
+            aoa: d.aoa,
+            alt: d.alt,
+        })
+        .filter(|d| TOP_RANGE_X.contains(&d.x) && TOP_RANGE_Y.contains(&d.y));
+
     // draw approach shadow
     chart
         .draw_series(LineSeries::new(
-            track.iter().map(|d| (m_to_nm(d.x), m_to_nm(d.y))),
+            track_in_nm.clone().map(|d| (d.x, d.y)),
             THEME_BG.stroke_width(4),
         ))
         .unwrap();
@@ -90,26 +125,9 @@ pub fn draw_chart(track: Vec<Datum>) {
     // draw approach
     let mut points = Vec::new();
     let mut color = THEME_TRACK_GREEN;
-    for datum in &track {
-        // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
-        let next_color = if datum.aoa <= 6.9 {
-            // fast
-            THEME_TRACK_RED
-        } else if datum.aoa <= 7.4 {
-            // slightly fast
-            THEME_TRACK_YELLOW
-        } else if datum.aoa < 8.8 {
-            // on speed
-            THEME_TRACK_GREEN
-        } else if datum.aoa < 9.3 {
-            // slighly slow
-            THEME_TRACK_YELLOW
-        } else {
-            // slow
-            THEME_TRACK_RED
-        };
-
-        let point = (m_to_nm(datum.x), m_to_nm(datum.y));
+    for datum in track_in_nm {
+        let next_color = aoa_color(datum.aoa);
+        let point = (datum.x, datum.y);
 
         if points.is_empty() {
             color = next_color;
@@ -149,11 +167,11 @@ pub fn draw_chart(track: Vec<Datum>) {
 
     let mut chart = ChartBuilder::on(&bottom)
         .margin(5)
-        .x_label_area_size(100)
-        .y_label_area_size(100)
+        .x_label_area_size(X_LABEL_AREA_SIZE)
+        .y_label_area_size(0)
         .build_cartesian_2d(
-            CustomRange((0.0f64..1.5f64).with_key_points(vec![0.25f64, 0.75, 1.0])),
-            0.0f64..500.0f64,
+            CustomRange(SIDE_RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
+            SIDE_RANGE_Y,
         )
         .unwrap();
 
@@ -179,14 +197,17 @@ pub fn draw_chart(track: Vec<Datum>) {
     ];
 
     for (deg, color) in lines {
-        let mut x = 1.5;
-        let mut y = deg.to_radians().tan() * m_to_ft(nm_to_m(1.5));
-        if y > 500.0 {
-            x = ft_to_nm(500.0) / deg.to_radians().tan();
-            y = 500.0;
+        let mut x = SIDE_RANGE_X.end;
+        let mut y = deg.to_radians().tan() * m_to_ft(nm_to_m(SIDE_RANGE_X.end));
+        if y > SIDE_RANGE_Y.end {
+            x = ft_to_nm(SIDE_RANGE_Y.end) / deg.to_radians().tan();
+            y = SIDE_RANGE_Y.end;
         }
         chart
-            .draw_series(LineSeries::new([(0.0, 0.0), (x, y)], color.mix(0.4)))
+            .draw_series(LineSeries::new(
+                [(SIDE_RANGE_X.start, SIDE_RANGE_Y.start), (x, y)],
+                color.mix(0.4),
+            ))
             .unwrap();
     }
 
@@ -202,23 +223,7 @@ pub fn draw_chart(track: Vec<Datum>) {
     let mut points = Vec::new();
     let mut color = THEME_TRACK_GREEN;
     for datum in &track {
-        // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
-        let next_color = if datum.aoa <= 6.9 {
-            // fast
-            THEME_TRACK_RED
-        } else if datum.aoa <= 7.4 {
-            // slightly fast
-            THEME_TRACK_YELLOW
-        } else if datum.aoa < 8.8 {
-            // on speed
-            THEME_TRACK_GREEN
-        } else if datum.aoa < 9.3 {
-            // slighly slow
-            THEME_TRACK_YELLOW
-        } else {
-            // slow
-            THEME_TRACK_RED
-        };
+        let next_color = aoa_color(datum.aoa);
 
         let point = (m_to_nm(datum.x), m_to_ft(datum.alt));
 
@@ -253,6 +258,26 @@ pub fn draw_chart(track: Vec<Datum>) {
     }
 }
 
+fn aoa_color(aoa: f64) -> RGBColor {
+    // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
+    if aoa <= 6.9 {
+        // fast
+        THEME_TRACK_RED
+    } else if aoa <= 7.4 {
+        // slightly fast
+        THEME_TRACK_YELLOW
+    } else if aoa < 8.8 {
+        // on speed
+        THEME_TRACK_GREEN
+    } else if aoa < 9.3 {
+        // slightly slow
+        THEME_TRACK_YELLOW
+    } else {
+        // slow
+        THEME_TRACK_RED
+    }
+}
+
 struct CustomRange(WithKeyPoints<RangedCoordf64>);
 
 impl Ranged for CustomRange {
@@ -283,6 +308,7 @@ impl ValueFormatter<f64> for CustomRange {
     fn format(v: &f64) -> String {
         match *v {
             v if (v - 0.25).abs() < f64::EPSILON => "¼nm".to_string(),
+            v if (v - 0.50).abs() < f64::EPSILON => "½nm".to_string(),
             v if (v - 0.75).abs() < f64::EPSILON => "¾nm".to_string(),
             _ => format!("{}nm", v),
         }
