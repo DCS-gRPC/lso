@@ -6,6 +6,7 @@ use plotters::coord::types::RangedCoordf64;
 use plotters::prelude::*;
 
 use crate::data;
+use crate::datums::Datum;
 use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft};
 
 const THEME_BG: RGBColor = RGBColor(30, 41, 49);
@@ -20,19 +21,11 @@ const THEME_TRACK_RED: RGBColor = RGBColor(248, 113, 113);
 const THEME_TRACK_YELLOW: RGBColor = RGBColor(250, 204, 21);
 const THEME_TRACK_GREEN: RGBColor = RGBColor(132, 230, 53);
 
-#[derive(Debug)]
-pub struct Datum {
-    pub x: f64,
-    pub y: f64,
-    pub aoa: f64,
-    pub alt: f64,
-}
-
 #[tracing::instrument(skip_all)]
 pub fn draw_chart(track: Vec<Datum>) {
     const WIDTH: u32 = 1000;
     const X_LABEL_AREA_SIZE: u32 = 30;
-    const TOP_RANGE_X: Range<f64> = 0.0..1.1;
+    const TOP_RANGE_X: Range<f64> = -0.008..1.1;
     const TOP_RANGE_Y: Range<f64> = -0.25..0.15;
     const SIDE_RANGE_X: Range<f64> = TOP_RANGE_X;
     const SIDE_RANGE_Y: Range<f64> = 0.0..500.0;

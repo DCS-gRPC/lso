@@ -3,9 +3,8 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::draw::Datum;
+use crate::datums::Datums;
 use crate::tasks::detect_recovery::is_recovery_attempt;
-use crate::tasks::record_recovery::calculate_datum;
 use crate::transform::Transform;
 use tacview::record::{Property, Record, Tag, Update};
 use ultraviolet::DVec3;
@@ -83,7 +82,7 @@ struct Track {
     plane: Transform,
     is_recovery_attempt: bool,
     is_dirty: bool,
-    datums: Vec<Datum>,
+    datums: Datums,
 }
 
 impl Track {
@@ -95,7 +94,7 @@ impl Track {
             plane: Default::default(),
             is_recovery_attempt: false,
             is_dirty: false,
-            datums: Vec::new(),
+            datums: Datums::default(),
         }
     }
 
@@ -187,9 +186,7 @@ impl Track {
         }
 
         if self.is_recovery_attempt {
-            if let Some(datum) = calculate_datum(&self.carrier, &self.plane) {
-                self.datums.push(datum);
-            } else {
+            if !self.datums.next(&self.carrier, &self.plane) {
                 self.draw();
             }
         } else if is_recovery_attempt(&self.carrier, &self.plane) {
@@ -199,7 +196,7 @@ impl Track {
 
     fn draw(&mut self) {
         if self.is_recovery_attempt {
-            crate::draw::draw_chart(std::mem::take(&mut self.datums));
+            crate::draw::draw_chart(std::mem::take(&mut self.datums).finish());
             self.is_recovery_attempt = false;
         }
     }

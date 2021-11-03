@@ -1,12 +1,16 @@
 mod client;
 mod commands;
 mod data;
+mod datums;
 mod draw;
 mod tasks;
 mod transform;
 mod utils;
 
 use clap::Parser;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{filter, fmt};
 
 /// This doc string acts as a help message when the user runs '--help'
 /// as do all doc strings on fields
@@ -29,13 +33,17 @@ enum Command {
 #[tokio::main]
 async fn main() {
     let opts: Opts = Opts::parse();
-    tracing_subscriber::fmt()
-        .with_max_level(match opts.verbose {
-            0 => tracing::Level::INFO,
-            1 => tracing::Level::DEBUG,
-            _ => tracing::Level::TRACE,
-        })
-        .finish();
+    let max_level = match opts.verbose {
+        0 => tracing::Level::INFO,
+        1 => tracing::Level::DEBUG,
+        _ => tracing::Level::TRACE,
+    };
+    tracing_subscriber::registry()
+        .with(filter::filter_fn(move |m| {
+            m.target().starts_with("lso") && m.level() <= &max_level
+        }))
+        .with(fmt::layer())
+        .init();
 
     match opts.command {
         Command::Run(opts) => commands::run::execute(opts).await,

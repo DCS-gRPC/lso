@@ -10,22 +10,12 @@ use stubs::group::group_service_client::GroupServiceClient;
 use stubs::unit::unit_service_client::UnitServiceClient;
 use stubs::{coalition, group, unit};
 use tonic::transport::{Channel, Endpoint};
-use tracing_subscriber::layer::{Layer, SubscriberExt};
-use tracing_subscriber::util::SubscriberInitExt;
 
 /// A subcommand for controlling testing
 #[derive(clap::Parser)]
 pub struct Opts {}
 
 pub async fn execute(_opts: Opts) {
-    let filter =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "recorder=trace,lso=trace".to_owned());
-    let registry = tracing_subscriber::registry().with(
-        tracing_subscriber::filter::EnvFilter::new(filter)
-            .and_then(tracing_subscriber::fmt::layer()),
-    );
-    registry.init();
-
     let backoff = ExponentialBackoff {
         // never wait longer than 30s for a retry
         max_interval: Duration::from_secs(30),
@@ -63,7 +53,7 @@ struct Services {
 
 async fn run() -> Result<(), Error> {
     let addr = "http://127.0.0.1:50051"; // TODO: move to config
-    tracing::debug!(endpoint = addr, "Connecting to gRPC server");
+    tracing::info!(endpoint = addr, "Connecting to gRPC server");
     let channel = Endpoint::from_static(addr)
         .keep_alive_while_idle(true)
         .connect()
