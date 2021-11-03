@@ -59,8 +59,8 @@ pub async fn record_recovery(
 
     while interval.next().await.is_some() {
         let (carrier, plane) = futures_util::future::try_join(
-            client1.get_transform(&carrier_name),
-            client2.get_transform(&plane_name),
+            client1.export(&carrier_name),
+            client2.export(&plane_name),
         )
         .await?;
 
@@ -237,7 +237,7 @@ fn tags<I: AsRef<str>>(attrs: impl IntoIterator<Item = I>) -> HashSet<Tag> {
 
 fn color(coalition: Coalition) -> Color {
     match coalition {
-        Coalition::Neutral => Color::Grey,
+        Coalition::All | Coalition::Neutral => Color::Grey,
         Coalition::Red => Color::Red,
         Coalition::Blue => Color::Blue,
     }

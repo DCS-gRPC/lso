@@ -20,8 +20,8 @@ pub async fn detect_recovery(
 
     while interval.next().await.is_some() {
         let (carrier, plane) = futures_util::future::try_join(
-            client1.get_transform(&carrier_name),
-            client2.get_transform(&plane_name),
+            client1.export(&carrier_name),
+            client2.export(&plane_name),
         )
         .await?;
 
