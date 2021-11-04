@@ -78,6 +78,11 @@ pub static FA18C: AirplaneInfo = AirplaneInfo {
         y: -2.240897,
         z: -7.237348,
     },
+    hook_joint: DVec3 {
+        x: 0.0,
+        y: -0.717587,
+        z: -6.231369,
+    },
     glide_slope: 3.5,
 };
 
@@ -112,6 +117,9 @@ impl CarrierInfo {
 pub struct AirplaneInfo {
     /// Hook position relative to the object's origin.
     pub hook: DVec3,
+    /// Hook join (where the hook is attached to the plane) position relative to the object's
+    /// origin.
+    pub hook_joint: DVec3,
     /// The optimal glide slope in degrees.
     pub glide_slope: f64,
 }

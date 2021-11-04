@@ -1,4 +1,4 @@
-use ultraviolet::DVec3;
+use ultraviolet::{DRotor3, DVec3};
 
 #[derive(Debug, Default)]
 pub struct Transform {
@@ -15,6 +15,7 @@ pub struct Transform {
     pub pitch: f64,
     // Roll in degrees.
     pub roll: f64,
+    pub rotation: DRotor3,
     pub aoa: f64,
     /// Time in seconds since the scenario started.
     pub time: f64,

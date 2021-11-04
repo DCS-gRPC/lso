@@ -1,13 +1,14 @@
 use std::collections::HashSet;
 use std::fs::File;
+use std::ops::Neg;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::datums::Datums;
 use crate::tasks::detect_recovery::is_recovery_attempt;
+use crate::track::Track;
 use crate::transform::Transform;
 use tacview::record::{Property, Record, Tag, Update};
-use ultraviolet::DVec3;
+use ultraviolet::{DRotor3, DVec3};
 
 #[derive(clap::Parser)]
 pub struct Opts {
@@ -22,7 +23,7 @@ pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut carriers: HashSet<u64> = HashSet::new();
     let mut planes: HashSet<u64> = HashSet::new();
-    let mut tracks: Vec<Track> = Vec::new();
+    let mut tracks: Vec<CarrierPlanePair> = Vec::new();
 
     let mut time = 0.0;
     for record in parser {
@@ -42,13 +43,13 @@ pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
                         if let Property::Type(tags) = p {
                             if tags.contains(&Tag::AircraftCarrier) {
                                 for plane_id in &planes {
-                                    tracks.push(Track::new(update.id, *plane_id));
+                                    tracks.push(CarrierPlanePair::new(update.id, *plane_id));
                                 }
 
                                 carriers.insert(update.id);
                             } else if tags.contains(&Tag::FixedWing) {
                                 for carrier_id in &carriers {
-                                    tracks.push(Track::new(*carrier_id, update.id));
+                                    tracks.push(CarrierPlanePair::new(*carrier_id, update.id));
                                 }
 
                                 planes.insert(update.id);
@@ -75,17 +76,17 @@ pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct Track {
+struct CarrierPlanePair {
     carrier_id: u64,
     carrier: Transform,
     plane_id: u64,
     plane: Transform,
     is_recovery_attempt: bool,
     is_dirty: bool,
-    datums: Datums,
+    datums: Track,
 }
 
-impl Track {
+impl CarrierPlanePair {
     fn new(carrier_id: u64, plane_id: u64) -> Self {
         Self {
             carrier_id,
@@ -94,7 +95,7 @@ impl Track {
             plane: Default::default(),
             is_recovery_attempt: false,
             is_dirty: false,
-            datums: Datums::default(),
+            datums: Track::default(),
         }
     }
 
@@ -134,6 +135,11 @@ impl Track {
                             transform.yaw.to_radians().sin() * transform.pitch.to_radians().cos(),
                             transform.pitch.to_radians().sin(),
                             transform.yaw.to_radians().cos() * transform.pitch.to_radians().cos(),
+                        );
+                        transform.rotation = DRotor3::from_euler_angles(
+                            transform.roll.neg().to_radians(),
+                            transform.pitch.neg().to_radians(),
+                            transform.heading.neg().to_radians(),
                         );
                     }
 

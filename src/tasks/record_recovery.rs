@@ -8,7 +8,7 @@ use tacview::record::{Color, Coords, GlobalProperty, Property, Record, Tag, Upda
 use tonic::{transport::Channel, Status};
 
 use crate::client::{HookClient, MissionClient, UnitClient};
-use crate::datums::Datums;
+use crate::track::Track;
 use crate::utils::shutdown::ShutdownHandle;
 
 #[tracing::instrument(skip(ch, shutdown))]
@@ -29,7 +29,7 @@ pub async fn record_recovery(
     let mut acmi = Cursor::new(Vec::new());
     // TODO: compressed
     let mut recording = tacview::Writer::new(&mut acmi)?;
-    let mut datums = Datums::default();
+    let mut datums = Track::default();
 
     let reference_time = mission.get_scenario_start_time().await?;
     recording.write(GlobalProperty::ReferenceTime(reference_time))?;

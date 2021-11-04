@@ -1,7 +1,9 @@
+use std::ops::Neg;
+
 use stubs::common::Unit;
 use stubs::unit::{self, unit_service_client::UnitServiceClient};
 use tonic::{transport::Channel, Status};
-use ultraviolet::DVec3;
+use ultraviolet::{DRotor3, DVec3};
 
 use crate::transform::Transform;
 
@@ -16,10 +18,7 @@ impl UnitClient {
         }
     }
 
-    pub async fn export(
-        &mut self,
-        unit_name: impl Into<String>,
-    ) -> Result<Transform, Status> {
+    pub async fn export(&mut self, unit_name: impl Into<String>) -> Result<Transform, Status> {
         let res = self
             .svc
             .export(unit::ExportRequest {
@@ -48,6 +47,11 @@ impl UnitClient {
             yaw: orientation.yaw,
             pitch: orientation.pitch,
             roll: orientation.roll,
+            rotation: DRotor3::from_euler_angles(
+                orientation.roll.neg().to_radians(),
+                orientation.pitch.neg().to_radians(),
+                res.heading.neg().to_radians(),
+            ),
             aoa,
             time: res.time,
         })

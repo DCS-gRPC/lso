@@ -6,7 +6,7 @@ use plotters::coord::types::RangedCoordf64;
 use plotters::prelude::*;
 
 use crate::data;
-use crate::datums::Datum;
+use crate::track::{Datum, TrackResult};
 use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft};
 
 const THEME_BG: RGBColor = RGBColor(30, 41, 49);
@@ -22,11 +22,11 @@ const THEME_TRACK_YELLOW: RGBColor = RGBColor(250, 204, 21);
 const THEME_TRACK_GREEN: RGBColor = RGBColor(132, 230, 53);
 
 #[tracing::instrument(skip_all)]
-pub fn draw_chart(track: Vec<Datum>) {
+pub fn draw_chart(track: TrackResult) {
     const WIDTH: u32 = 1000;
     const X_LABEL_AREA_SIZE: u32 = 30;
     const TOP_RANGE_X: Range<f64> = -0.008..1.1;
-    const TOP_RANGE_Y: Range<f64> = -0.25..0.15;
+    const TOP_RANGE_Y: Range<f64> = -0.15..0.15;
     const SIDE_RANGE_X: Range<f64> = TOP_RANGE_X;
     const SIDE_RANGE_Y: Range<f64> = 0.0..500.0;
 
@@ -40,14 +40,14 @@ pub fn draw_chart(track: Vec<Datum>) {
         * (WIDTH as f64))
         .floor() as u32;
 
+    let text_style = TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG);
     let root_drawing_area = SVGBackend::new(
         "test.svg",
         (WIDTH, top_height + side_height + X_LABEL_AREA_SIZE),
     )
     .into_drawing_area();
+    root_drawing_area.fill(&THEME_BG).unwrap();
     let (top, bottom) = root_drawing_area.split_vertically(top_height);
-
-    top.fill(&THEME_BG).unwrap();
 
     let mut chart = ChartBuilder::on(&top)
         .margin(5)
@@ -66,7 +66,7 @@ pub fn draw_chart(track: Vec<Datum>) {
         .disable_x_axis()
         .disable_y_axis()
         .axis_style(THEME_FG)
-        .x_label_style(TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG))
+        .x_label_style(text_style.clone())
         .draw()
         .unwrap();
 
@@ -99,6 +99,7 @@ pub fn draw_chart(track: Vec<Datum>) {
     }
 
     let track_in_nm = track
+        .datums
         .iter()
         .map(|d| Datum {
             x: m_to_nm(d.x),
@@ -157,8 +158,6 @@ pub fn draw_chart(track: Vec<Datum>) {
     // --
     //
 
-    bottom.fill(&THEME_BG).unwrap();
-
     let mut chart = ChartBuilder::on(&bottom)
         .margin(5)
         .x_label_area_size(X_LABEL_AREA_SIZE)
@@ -175,7 +174,7 @@ pub fn draw_chart(track: Vec<Datum>) {
         .disable_mesh()
         .disable_y_axis()
         .axis_style(THEME_FG)
-        .x_label_style(TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG))
+        .x_label_style(text_style.clone())
         .draw()
         .unwrap();
 
@@ -205,7 +204,7 @@ pub fn draw_chart(track: Vec<Datum>) {
     // draw approach shadow
     chart
         .draw_series(LineSeries::new(
-            track.iter().map(|d| (m_to_nm(d.x), m_to_ft(d.alt))),
+            track.datums.iter().map(|d| (m_to_nm(d.x), m_to_ft(d.alt))),
             THEME_BG.stroke_width(4),
         ))
         .unwrap();
@@ -213,7 +212,7 @@ pub fn draw_chart(track: Vec<Datum>) {
     // draw approach
     let mut points = Vec::new();
     let mut color = THEME_TRACK_GREEN;
-    for datum in &track {
+    for datum in &track.datums {
         let next_color = aoa_color(datum.aoa);
 
         let point = (m_to_nm(datum.x), m_to_ft(datum.alt));
@@ -246,6 +245,14 @@ pub fn draw_chart(track: Vec<Datum>) {
                 color.stroke_width(2),
             ))
             .unwrap();
+    }
+
+    if let Some(grading) = track.grading {
+        if let Some(cable) = grading.cable {
+            bottom
+                .draw_text(&format!("Cable: {}", cable), &text_style, (8, 8))
+                .unwrap();
+        }
     }
 }
 
