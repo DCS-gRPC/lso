@@ -14,6 +14,7 @@ pub async fn detect_recovery(
     plane_name: String,
     shutdown: ShutdownHandle,
 ) -> Result<(), Status> {
+    // TODO: handle unit gone
     let mut client1 = UnitClient::new(ch.clone());
     let mut client2 = UnitClient::new(ch.clone());
     let mut interval = crate::utils::interval::interval(Duration::from_secs(2), shutdown.clone());

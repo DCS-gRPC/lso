@@ -20,6 +20,7 @@ pub async fn record_recovery(
 ) -> Result<(), Status> {
     tracing::debug!("start recording");
 
+    // TODO: handle unit gone
     let mut client1 = UnitClient::new(ch.clone());
     let mut client2 = UnitClient::new(ch.clone());
     let mut mission = MissionClient::new(ch.clone());

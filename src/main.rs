@@ -11,6 +11,7 @@ use clap::Parser;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter, fmt};
+use utils::shutdown::Shutdown;
 
 /// This doc string acts as a help message when the user runs '--help'
 /// as do all doc strings on fields
@@ -45,8 +46,16 @@ async fn main() {
         .with(fmt::layer())
         .init();
 
+    // shutdown gracefully on CTRL+C
+    let shutdown = Shutdown::new();
+    let shutdown_handle = shutdown.handle();
+    tokio::task::spawn(async {
+        tokio::signal::ctrl_c().await.unwrap();
+        shutdown.shutdown().await;
+    });
+
     match opts.command {
-        Command::Run(opts) => commands::run::execute(opts).await,
+        Command::Run(opts) => commands::run::execute(opts, shutdown_handle).await,
         // TODO: better error report than unwrap?
         Command::File(opts) => commands::file::execute(opts).unwrap(),
     }

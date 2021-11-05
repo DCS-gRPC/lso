@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use crate::utils::shutdown::Shutdown;
+use crate::utils::shutdown::{Shutdown, ShutdownHandle};
 use backoff::ExponentialBackoff;
-use futures_util::future::{select, FutureExt};
+use futures_util::future::select;
 use futures_util::TryFutureExt;
 use stubs::coalition::coalition_service_client::CoalitionServiceClient;
 use stubs::common::{Coalition, GroupCategory};
@@ -15,7 +15,7 @@ use tonic::transport::{Channel, Endpoint};
 #[derive(clap::Parser)]
 pub struct Opts {}
 
-pub async fn execute(_opts: Opts) {
+pub async fn execute(_opts: Opts, shutdown_handle: ShutdownHandle) {
     let backoff = ExponentialBackoff {
         // never wait longer than 30s for a retry
         max_interval: Duration::from_secs(30),
@@ -39,8 +39,7 @@ pub async fn execute(_opts: Opts) {
                 );
             },
         )),
-        // stop on CTRL+C
-        Box::pin(tokio::signal::ctrl_c().map(|_| ())),
+        shutdown_handle.signal(),
     )
     .await;
 }
@@ -160,6 +159,8 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
             .await?;
         }
     }
+
+    // TODO: listen on events for new carrier/plane pairs to observe
 
     Ok(())
 }
