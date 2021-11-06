@@ -79,21 +79,23 @@ impl Track {
             y = y.neg();
         }
 
-        // Detect touchdown based on whether the hook's end touches the deck.
         let hook_offset = data::FA18C.hook.rotated_by(plane.rotation);
         let alt = plane.alt - data::NIMITZ.deck_altitude + hook_offset.y;
-        if self.grading.is_none() && alt <= 0.01 {
-            self.grading = Some(Grading {
-                cable: get_cable(carrier, plane),
-            });
-        }
-
         self.datums.push(Datum {
             x,
             y,
             aoa: plane.aoa,
-            alt,
+            alt: alt.max(0.0),
         });
+
+        // Detect touchdown based on whether the hook's end touches the deck.
+        if self.grading.is_none() && alt <= 0.01 {
+            self.grading = Some(Grading {
+                cable: get_cable(carrier, plane),
+            });
+            tracing::debug!(distance_in_m = distance, "stop tracking");
+            return false;
+        }
 
         true
     }
