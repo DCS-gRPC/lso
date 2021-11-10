@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use tonic::transport::Channel;
+use tonic::Code;
 
 use crate::client::UnitClient;
 use crate::transform::Transform;
@@ -10,24 +11,36 @@ use crate::utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle};
 #[tracing::instrument(skip(ch, shutdown))]
 pub async fn detect_recovery(
     ch: Channel,
-    carrier_name: String,
-    plane_name: String,
+    carrier_name: &str,
+    plane_name: &str,
     shutdown: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
-    // TODO: handle unit gone
+    tracing::debug!("started observing for possible recovery attempts");
+
     let mut client1 = UnitClient::new(ch.clone());
     let mut client2 = UnitClient::new(ch.clone());
     let mut interval = crate::utils::interval::interval(Duration::from_secs(2), shutdown.clone());
 
     while interval.next().await.is_some() {
-        let (carrier, plane) = futures_util::future::try_join(
-            client1.export(&carrier_name),
-            client2.export(&plane_name),
+        let result = futures_util::future::try_join(
+            client1.get_transform(carrier_name),
+            client2.get_transform(plane_name),
         )
-        .await?;
+        .await;
 
-        if is_recovery_attempt(&carrier, &plane) {
-            break;
+        match result {
+            Ok((carrier, plane)) => {
+                if is_recovery_attempt(&carrier, &plane) {
+                    break;
+                }
+            }
+            Err(status) if status.code() == Code::NotFound => {
+                tracing::debug!("stop tracking as either carrier or plane doesn't exist anymore");
+                return Ok(());
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
         }
     }
 

@@ -14,13 +14,12 @@ use crate::utils::shutdown::ShutdownHandle;
 #[tracing::instrument(skip(ch, shutdown))]
 pub async fn record_recovery(
     ch: Channel,
-    carrier_name: String,
-    plane_name: String,
+    carrier_name: &str,
+    plane_name: &str,
     shutdown: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
-    tracing::debug!("start recording");
+    tracing::debug!("started recording");
 
-    // TODO: handle unit gone
     let mut client1 = UnitClient::new(ch.clone());
     let mut client2 = UnitClient::new(ch.clone());
     let mut mission = MissionClient::new(ch.clone());
@@ -48,16 +47,16 @@ pub async fn record_recovery(
     let mut lat_ref = 0.0;
     let mut lon_ref = 0.0;
 
-    recording.write(create_initial_update(&mut client1, 1, &carrier_name).await?)?;
-    recording.write(create_initial_update(&mut client1, 2, &plane_name).await?)?;
+    recording.write(create_initial_update(&mut client1, 1, carrier_name).await?)?;
+    recording.write(create_initial_update(&mut client1, 2, plane_name).await?)?;
 
     let mut known_carrier_coords = None;
     let mut known_plane_coords = None;
 
     while interval.next().await.is_some() {
         let (carrier, plane) = futures_util::future::try_join(
-            client1.export(&carrier_name),
-            client2.export(&plane_name),
+            client1.get_transform(carrier_name),
+            client2.get_transform(plane_name),
         )
         .await?;
 

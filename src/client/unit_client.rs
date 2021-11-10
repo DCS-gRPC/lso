@@ -19,7 +19,10 @@ impl UnitClient {
         }
     }
 
-    pub async fn export(&mut self, unit_name: impl Into<String>) -> Result<Transform, Status> {
+    pub async fn get_transform(
+        &mut self,
+        unit_name: impl Into<String>,
+    ) -> Result<Transform, Status> {
         let res = self
             .svc
             .get_transform(unit::v0::GetTransformRequest {

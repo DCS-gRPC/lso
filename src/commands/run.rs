@@ -1,21 +1,28 @@
 use std::time::Duration;
 
-use crate::utils::shutdown::{Shutdown, ShutdownHandle};
+use crate::utils::shutdown::ShutdownHandle;
 use backoff::ExponentialBackoff;
 use futures_util::future::select;
-use futures_util::TryFutureExt;
+use futures_util::{StreamExt, TryFutureExt};
 use stubs::coalition::v0::coalition_service_client::CoalitionServiceClient;
 use stubs::common::v0::{Coalition, GroupCategory};
 use stubs::group::v0::group_service_client::GroupServiceClient;
+use stubs::mission::v0::mission_service_client::MissionServiceClient;
+use stubs::mission::v0::stream_events_response::Event;
 use stubs::unit::v0::unit_service_client::UnitServiceClient;
-use stubs::{coalition, group, unit};
+use stubs::{coalition, common, group, mission, unit};
+use tokio::sync::mpsc;
 use tonic::transport::{Channel, Endpoint};
+use tonic::Status;
 
 /// A subcommand for controlling testing
 #[derive(clap::Parser)]
 pub struct Opts {}
 
 pub async fn execute(_opts: Opts, shutdown_handle: ShutdownHandle) {
+    let addr = "http://127.0.0.1:50051"; // TODO: move to config
+    tracing::info!(endpoint = addr, "Connecting to gRPC server");
+
     let backoff = ExponentialBackoff {
         // never wait longer than 30s for a retry
         max_interval: Duration::from_secs(30),
@@ -29,10 +36,14 @@ pub async fn execute(_opts: Opts, shutdown_handle: ShutdownHandle) {
             backoff,
             // on each try, run the program and consider every error as transient (ie. worth
             // retrying)
-            || async { run().await.map_err(backoff::Error::Transient) },
+            || async {
+                run(addr, shutdown_handle.clone())
+                    .await
+                    .map_err(backoff::Error::Transient)
+            },
             // error hook:
             |err, backoff: Duration| {
-                tracing::error!(
+                tracing::debug!(
                     %err,
                     backoff = %format!("{:.2}s", backoff.as_secs_f64()),
                     "retrying after error"
@@ -44,35 +55,24 @@ pub async fn execute(_opts: Opts, shutdown_handle: ShutdownHandle) {
     .await;
 }
 
-struct Services {
-    coalition: CoalitionServiceClient<Channel>,
-    group: GroupServiceClient<Channel>,
-    unit: UnitServiceClient<Channel>,
-}
-
-async fn run() -> Result<(), crate::error::Error> {
-    let addr = "http://127.0.0.1:50051"; // TODO: move to config
-    tracing::info!(endpoint = addr, "Connecting to gRPC server");
+async fn run(
+    addr: &'static str,
+    shutdown_handle: ShutdownHandle,
+) -> Result<(), crate::error::Error> {
     let channel = Endpoint::from_static(addr)
         .keep_alive_while_idle(true)
         .connect()
         .await?;
-    let mut svc = Services {
-        coalition: CoalitionServiceClient::new(channel.clone()),
-        group: GroupServiceClient::new(channel.clone()),
-        unit: UnitServiceClient::new(channel.clone()),
-    };
+    tracing::info!("Connected");
+    let coalition_svc = CoalitionServiceClient::new(channel.clone());
+    let group_svc = GroupServiceClient::new(channel.clone());
+    let mut unit_svc = UnitServiceClient::new(channel.clone());
+    let mut mission_svc = MissionServiceClient::new(channel.clone());
 
-    detect_recoveries(&mut svc, channel).await?;
-
-    Ok(())
-}
-
-async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), crate::error::Error> {
     // initial full-sync of all current units inside of the mission
     let groups = futures_util::future::try_join_all(
         [Coalition::Blue, Coalition::Red, Coalition::Neutral].map(|coalition| {
-            let mut coalition_svc = svc.coalition.clone();
+            let mut coalition_svc = coalition_svc.clone();
             async move {
                 coalition_svc
                     .get_groups(coalition::v0::GetGroupsRequest {
@@ -99,15 +99,14 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), crate:
                 }
             })
             .map(|group| {
-                let mut group_svc = svc.group.clone();
+                let mut group_svc = group_svc.clone();
                 async move {
-                    let category = group.category;
                     group_svc
                         .get_units(group::v0::GetUnitsRequest {
                             group_name: group.name,
                             active: Some(true),
                         })
-                        .map_ok(|res| (category, res.into_inner().units))
+                        .map_ok(|res| res.into_inner().units)
                         .await
                 }
             }),
@@ -117,50 +116,132 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), crate:
     let mut planes = Vec::new();
     let mut carriers = Vec::new();
 
-    for (category, units) in group_units {
+    for units in group_units {
         for unit in units {
-            match GroupCategory::from_i32(category) {
-                // TODO: only players
-                // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
-                Some(GroupCategory::Airplane) => planes.push(unit.name),
-                Some(GroupCategory::Ship) => {
-                    let attrs = svc
-                        .unit
-                        .get_descriptor(unit::v0::GetDescriptorRequest {
-                            name: unit.name.clone(),
-                        })
-                        .await?
-                        .into_inner()
-                        .attributes;
-
-                    if attrs
-                        .iter()
-                        .any(|a| a.as_str() == "AircraftCarrier With Arresting Gear")
-                    {
-                        carriers.push(unit.name)
-                    }
-                }
-                _ => {}
+            match check_candidate(&mut unit_svc, &unit).await? {
+                Some(Candidate::Plane) => planes.push(unit.name),
+                Some(Candidate::Carrier) => carriers.push(unit.name),
+                None => {}
             }
         }
     }
 
-    let shutdown = Shutdown::new();
+    let (tx, mut rx) = mpsc::channel(1);
 
-    for carrier_name in carriers {
-        for plane_name in &planes {
-            // TODO: retry, error handling, spawn
-            crate::tasks::detect_recovery::detect_recovery(
-                ch.clone(),
-                carrier_name.clone(),
-                plane_name.clone(),
-                shutdown.handle(),
+    let tx2 = tx.clone();
+    let spawn_detect_recovery = move |carrier_name: String, plane_name: String| {
+        let channel = channel.clone();
+        let tx = tx2.clone();
+        let shutdown_handle = shutdown_handle.clone();
+        tokio::spawn(async move {
+            if let Err(err) = crate::tasks::detect_recovery::detect_recovery(
+                channel,
+                &carrier_name,
+                &plane_name,
+                shutdown_handle,
             )
-            .await?;
+            .await
+            {
+                tx.send(err).await.ok();
+            }
+        });
+    };
+
+    for carrier_name in &carriers {
+        for plane_name in &planes {
+            spawn_detect_recovery(carrier_name.clone(), plane_name.clone());
         }
     }
 
-    // TODO: listen on events for new carrier/plane pairs to observe
+    // listen for birth events to track carriers and planes spawned at a later point in time
+    let mut events = mission_svc
+        .stream_events(mission::v0::StreamEventsRequest {})
+        .await?
+        .into_inner();
+    let tx = tx.clone();
+    tokio::spawn(async move {
+        while let Some(event) = events.next().await {
+            let event = match event {
+                Ok(event) => event,
+                Err(err) => {
+                    tx.send(err.into()).await.ok();
+                    return;
+                }
+            };
 
-    Ok(())
+            if let stubs::mission::v0::StreamEventsResponse {
+                event:
+                    Some(Event::Birth(mission::v0::stream_events_response::BirthEvent {
+                        initiator:
+                            Some(common::v0::Initiator {
+                                initiator: Some(common::v0::initiator::Initiator::Unit(unit)),
+                            }),
+                        ..
+                    })),
+                ..
+            } = event
+            {
+                match check_candidate(&mut unit_svc, &unit).await {
+                    Ok(Some(Candidate::Plane)) => {
+                        for carrier_name in &carriers {
+                            spawn_detect_recovery(carrier_name.clone(), unit.name.clone());
+                        }
+                    }
+                    Ok(Some(Candidate::Carrier)) => {
+                        for plane_name in &planes {
+                            spawn_detect_recovery(unit.name.clone(), plane_name.clone());
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        tracing::error!(
+                            unit_name = %unit.name,
+                            %err,
+                            "ignoring unit due to an error while checking its eligibility",
+                        );
+                    }
+                }
+            }
+        }
+    });
+
+    match rx.recv().await {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
+}
+
+enum Candidate {
+    Carrier,
+    Plane,
+}
+
+async fn check_candidate(
+    svc: &mut UnitServiceClient<Channel>,
+    unit: &common::v0::Unit,
+) -> Result<Option<Candidate>, Status> {
+    match GroupCategory::from_i32(unit.category) {
+        // TODO: only players
+        // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
+        Some(GroupCategory::Airplane) => return Ok(Some(Candidate::Plane)),
+        Some(GroupCategory::Ship) => {
+            let attrs = svc
+                .get_descriptor(unit::v0::GetDescriptorRequest {
+                    name: unit.name.clone(),
+                })
+                .await?
+                .into_inner()
+                .attributes;
+
+            if attrs
+                .iter()
+                .any(|a| a.as_str() == "AircraftCarrier With Arresting Gear")
+            {
+                return Ok(Some(Candidate::Carrier));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(None)
 }
