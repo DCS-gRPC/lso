@@ -4,10 +4,10 @@ use crate::utils::shutdown::{Shutdown, ShutdownHandle};
 use backoff::ExponentialBackoff;
 use futures_util::future::select;
 use futures_util::TryFutureExt;
-use stubs::coalition::coalition_service_client::CoalitionServiceClient;
-use stubs::common::{Coalition, GroupCategory};
-use stubs::group::group_service_client::GroupServiceClient;
-use stubs::unit::unit_service_client::UnitServiceClient;
+use stubs::coalition::v0::coalition_service_client::CoalitionServiceClient;
+use stubs::common::v0::{Coalition, GroupCategory};
+use stubs::group::v0::group_service_client::GroupServiceClient;
+use stubs::unit::v0::unit_service_client::UnitServiceClient;
 use stubs::{coalition, group, unit};
 use tonic::transport::{Channel, Endpoint};
 
@@ -75,7 +75,7 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
             let mut coalition_svc = svc.coalition.clone();
             async move {
                 coalition_svc
-                    .get_groups(coalition::GetGroupsRequest {
+                    .get_groups(coalition::v0::GetGroupsRequest {
                         coalition: coalition.into(),
                         category: None,
                     })
@@ -103,7 +103,7 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
                 async move {
                     let category = group.category;
                     group_svc
-                        .get_units(group::GetUnitsRequest {
+                        .get_units(group::v0::GetUnitsRequest {
                             group_name: group.name,
                             active: Some(true),
                         })
@@ -126,7 +126,7 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
                 Some(GroupCategory::Ship) => {
                     let attrs = svc
                         .unit
-                        .get_descriptor(unit::GetDescriptorRequest {
+                        .get_descriptor(unit::v0::GetDescriptorRequest {
                             name: unit.name.clone(),
                         })
                         .await?

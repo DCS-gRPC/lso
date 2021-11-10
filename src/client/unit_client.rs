@@ -1,7 +1,8 @@
 use std::ops::Neg;
 
-use stubs::common::Unit;
-use stubs::unit::{self, unit_service_client::UnitServiceClient};
+use stubs::common::v0::Unit;
+use stubs::unit;
+use stubs::unit::v0::unit_service_client::UnitServiceClient;
 use tonic::{transport::Channel, Status};
 use ultraviolet::{DRotor3, DVec3};
 
@@ -21,7 +22,7 @@ impl UnitClient {
     pub async fn export(&mut self, unit_name: impl Into<String>) -> Result<Transform, Status> {
         let res = self
             .svc
-            .export(unit::ExportRequest {
+            .get_transform(unit::v0::GetTransformRequest {
                 name: unit_name.into(),
             })
             .await?
@@ -60,7 +61,7 @@ impl UnitClient {
     pub async fn get_unit(&mut self, unit_name: &str) -> Result<Unit, Status> {
         let unit = self
             .svc
-            .get(unit::GetRequest {
+            .get(unit::v0::GetRequest {
                 name: unit_name.to_string(),
             })
             .await?
@@ -75,7 +76,7 @@ impl UnitClient {
     pub async fn get_descriptor(&mut self, unit_name: &str) -> Result<Vec<String>, Status> {
         let descriptor = self
             .svc
-            .get_descriptor(unit::GetDescriptorRequest {
+            .get_descriptor(unit::v0::GetDescriptorRequest {
                 name: unit_name.to_string(),
             })
             .await?

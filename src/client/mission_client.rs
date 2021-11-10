@@ -1,5 +1,5 @@
 use stubs::mission;
-use stubs::mission::mission_service_client::MissionServiceClient;
+use stubs::mission::v0::mission_service_client::MissionServiceClient;
 use tonic::{transport::Channel, Status};
 
 pub struct MissionClient {
@@ -16,7 +16,7 @@ impl MissionClient {
     pub async fn get_scenario_start_time(&mut self) -> Result<String, Status> {
         let res = self
             .svc
-            .get_scenario_start_time(mission::GetScenarioStartTimeRequest {})
+            .get_scenario_start_time(mission::v0::GetScenarioStartTimeRequest {})
             .await?
             .into_inner();
         Ok(res.datetime)

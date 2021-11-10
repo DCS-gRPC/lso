@@ -1,5 +1,5 @@
 use stubs::hook;
-use stubs::hook::hook_service_client::HookServiceClient;
+use stubs::hook::v0::hook_service_client::HookServiceClient;
 use tonic::{transport::Channel, Status};
 
 pub struct HookClient {
@@ -16,7 +16,7 @@ impl HookClient {
     pub async fn get_mission_name(&mut self) -> Result<String, Status> {
         let res = self
             .svc
-            .get_mission_name(hook::GetMissionNameRequest {})
+            .get_mission_name(hook::v0::GetMissionNameRequest {})
             .await?
             .into_inner();
         Ok(res.name)

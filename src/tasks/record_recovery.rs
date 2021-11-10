@@ -3,7 +3,7 @@ use std::io::Cursor;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use stubs::common::Coalition;
+use stubs::common::v0::Coalition;
 use tacview::record::{Color, Coords, GlobalProperty, Property, Record, Tag, Update};
 use tonic::{transport::Channel, Status};
 
