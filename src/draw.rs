@@ -5,7 +5,9 @@ use image::ImageFormat;
 use plotters::coord::combinators::WithKeyPoints;
 use plotters::coord::ranged1d::ValueFormatter;
 use plotters::coord::types::RangedCoordf64;
+use plotters::coord::Shift;
 use plotters::prelude::*;
+use plotters_bitmap::bitmap_pixel::RGBPixel;
 
 use crate::data;
 use crate::track::{Datum, TrackResult};
@@ -23,26 +25,23 @@ const THEME_TRACK_RED: RGBColor = RGBColor(248, 113, 113);
 const THEME_TRACK_YELLOW: RGBColor = RGBColor(250, 204, 21);
 const THEME_TRACK_GREEN: RGBColor = RGBColor(132, 230, 53);
 
+const WIDTH: u32 = 1000;
+const X_LABEL_AREA_SIZE: u32 = 30;
+const RANGE_X: Range<f64> = -0.02..0.76;
+const TOP_RANGE_Y: Range<f64> = -0.15..0.15;
+const SIDE_RANGE_Y: Range<f64> = 0.0..500.0;
+
 #[tracing::instrument(skip_all)]
 pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
-    const WIDTH: u32 = 1000;
-    const X_LABEL_AREA_SIZE: u32 = 30;
-    const TOP_RANGE_X: Range<f64> = -0.02..0.76;
-    const TOP_RANGE_Y: Range<f64> = -0.15..0.15;
-    const SIDE_RANGE_X: Range<f64> = TOP_RANGE_X;
-    const SIDE_RANGE_Y: Range<f64> = 0.0..500.0;
-
-    let top_height = (((TOP_RANGE_Y.end - TOP_RANGE_Y.start)
-        / (TOP_RANGE_X.end - TOP_RANGE_X.start))
+    let top_height = (((TOP_RANGE_Y.end - TOP_RANGE_Y.start) / (RANGE_X.end - RANGE_X.start))
         * (WIDTH as f64))
         .floor() as u32;
 
     let side_height = ((ft_to_nm(SIDE_RANGE_Y.end - SIDE_RANGE_Y.start) * 5.0
-        / (SIDE_RANGE_X.end - SIDE_RANGE_X.start))
+        / (RANGE_X.end - RANGE_X.start))
         * (WIDTH as f64))
         .floor() as u32;
 
-    let text_style = TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG);
     let root_drawing_area = BitMapBackend::new(
         "test.png",
         (WIDTH, top_height + side_height + X_LABEL_AREA_SIZE),
@@ -51,12 +50,23 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
     root_drawing_area.fill(&THEME_BG)?;
     let (top, bottom) = root_drawing_area.split_vertically(top_height);
 
-    let mut chart = ChartBuilder::on(&top)
+    draw_top_view(&track, top)?;
+    draw_side_view(&track, bottom)?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all)]
+pub fn draw_top_view(
+    track: &TrackResult,
+    canvas: DrawingArea<BitMapBackend<'_, RGBPixel>, Shift>,
+) -> Result<(), DrawError> {
+    let mut chart = ChartBuilder::on(&canvas)
         .margin(5)
         .x_label_area_size(0)
         .y_label_area_size(0)
         .build_cartesian_2d(
-            CustomRange(TOP_RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
+            CustomRange(RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
             TOP_RANGE_Y,
         )?;
 
@@ -67,12 +77,12 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
         .disable_x_axis()
         .disable_y_axis()
         .axis_style(THEME_FG)
-        .x_label_style(text_style.clone())
+        .x_label_style(text_style())
         .draw()?;
 
     // carrier top image is 300x300px which corresponds to 115x115m
-    let (w, _h) = top.dim_in_pixel();
-    let a = nm_to_m(TOP_RANGE_X.end - TOP_RANGE_X.start);
+    let (w, _h) = canvas.dim_in_pixel();
+    let a = nm_to_m(RANGE_X.end - RANGE_X.start);
     let m2px = f64::from(w) / a;
     let img_size = ((115.0 * m2px) as u32, (115.0 * m2px) as u32);
     let img_carrier_top = image::load_from_memory_with_format(
@@ -102,13 +112,13 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
     ];
 
     for (deg, color) in lines {
-        let y = deg.to_radians().tan() * TOP_RANGE_X.end;
+        let y = deg.to_radians().tan() * RANGE_X.end;
         chart.draw_series(LineSeries::new(
-            [(0.0, 0.0), (TOP_RANGE_X.end, y)],
+            [(0.0, 0.0), (RANGE_X.end, y)],
             color.mix(0.4),
         ))?;
         chart.draw_series(LineSeries::new(
-            [(0.0, 0.0), (TOP_RANGE_X.end, y.neg())],
+            [(0.0, 0.0), (RANGE_X.end, y.neg())],
             color.mix(0.4),
         ))?;
     }
@@ -122,7 +132,7 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
             aoa: d.aoa,
             alt: d.alt,
         })
-        .filter(|d| TOP_RANGE_X.contains(&d.x) && TOP_RANGE_Y.contains(&d.y));
+        .filter(|d| RANGE_X.contains(&d.x) && TOP_RANGE_Y.contains(&d.y));
 
     // draw approach shadow
     chart.draw_series(LineSeries::new(
@@ -162,17 +172,20 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
             color.stroke_width(2),
         ))?;
     }
+    Ok(())
+}
 
-    //
-    // --
-    //
-
-    let mut chart = ChartBuilder::on(&bottom)
+#[tracing::instrument(skip_all)]
+pub fn draw_side_view(
+    track: &TrackResult,
+    canvas: DrawingArea<BitMapBackend<'_, RGBPixel>, Shift>,
+) -> Result<(), DrawError> {
+    let mut chart = ChartBuilder::on(&canvas)
         .margin(5)
         .x_label_area_size(X_LABEL_AREA_SIZE)
         .y_label_area_size(0)
         .build_cartesian_2d(
-            CustomRange(SIDE_RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
+            CustomRange(RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
             SIDE_RANGE_Y,
         )?;
 
@@ -182,10 +195,13 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
         .disable_mesh()
         .disable_y_axis()
         .axis_style(THEME_FG)
-        .x_label_style(text_style.clone())
+        .x_label_style(text_style())
         .draw()?;
 
     // carrier side image is 300x150px which corresponds to 115x57.5m
+    let (w, _h) = canvas.dim_in_pixel();
+    let a = nm_to_m(RANGE_X.end - RANGE_X.start);
+    let m2px = f64::from(w) / a;
     let img_size = ((115.0 * m2px) as u32, (57.5 * m2px) as u32);
     let img_carrier_side = image::load_from_memory_with_format(
         include_bytes!("../img/carrier-side.png"),
@@ -207,8 +223,8 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
     ];
 
     for (deg, color) in lines {
-        let mut x = SIDE_RANGE_X.end;
-        let mut y = nm_to_ft(deg.to_radians().tan() * SIDE_RANGE_X.end);
+        let mut x = RANGE_X.end;
+        let mut y = nm_to_ft(deg.to_radians().tan() * RANGE_X.end);
         if y > SIDE_RANGE_Y.end {
             x = ft_to_nm(SIDE_RANGE_Y.end) / deg.to_radians().tan();
             y = SIDE_RANGE_Y.end;
@@ -225,7 +241,7 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
             aoa: d.aoa,
             alt: m_to_ft(d.alt),
         })
-        .filter(|d| SIDE_RANGE_X.contains(&d.x) && SIDE_RANGE_Y.contains(&d.alt));
+        .filter(|d| RANGE_X.contains(&d.x) && SIDE_RANGE_Y.contains(&d.alt));
 
     // draw approach shadow
     chart.draw_series(LineSeries::new(
@@ -267,13 +283,17 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
         ))?;
     }
 
-    if let Some(grading) = track.grading {
+    if let Some(grading) = &track.grading {
         if let Some(cable) = grading.cable {
-            bottom.draw_text(&format!("Cable: {}", cable), &text_style, (8, 8))?;
+            canvas.draw_text(&format!("Cable: {}", cable), &text_style(), (8, 8))?;
         }
     }
 
     Ok(())
+}
+
+fn text_style() -> TextStyle<'static> {
+    TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG)
 }
 
 fn aoa_color(aoa: f64) -> RGBColor {
