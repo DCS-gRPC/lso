@@ -66,7 +66,7 @@ pub fn draw_top_view(
     canvas: DrawingArea<BitMapBackend<'_, RGBPixel>, Shift>,
 ) -> Result<(), DrawError> {
     let mut chart = ChartBuilder::on(&canvas)
-        .margin(5)
+        .margin(0)
         .x_label_area_size(X_LABEL_AREA_SIZE)
         .y_label_area_size(0)
         .build_cartesian_2d(
@@ -184,7 +184,7 @@ pub fn draw_side_view(
     canvas: DrawingArea<BitMapBackend<'_, RGBPixel>, Shift>,
 ) -> Result<(), DrawError> {
     let mut chart = ChartBuilder::on(&canvas)
-        .margin(5)
+        .margin(0)
         .x_label_area_size(0)
         .y_label_area_size(0)
         .build_cartesian_2d(
