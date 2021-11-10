@@ -27,20 +27,22 @@ const THEME_TRACK_GREEN: RGBColor = RGBColor(34, 197, 94); // 22C55E
 
 const WIDTH: u32 = 1000;
 const X_LABEL_AREA_SIZE: u32 = 30;
-const RANGE_X: Range<f64> = -0.02..0.76;
+const RANGE_X: Range<f64> = -0.02..0.78;
 const TOP_RANGE_Y: Range<f64> = -0.15..0.15;
-const SIDE_RANGE_Y: Range<f64> = 0.0..500.0;
+const SIDE_RANGE_Y: Range<f64> = 0.0..350.0;
+const OVERLAP_OFFSET: u32 = 130;
 
 #[tracing::instrument(skip_all)]
 pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
-    let top_height = (((TOP_RANGE_Y.end - TOP_RANGE_Y.start) / (RANGE_X.end - RANGE_X.start))
-        * (WIDTH as f64))
-        .floor() as u32;
-
     let side_height = ((ft_to_nm(SIDE_RANGE_Y.end - SIDE_RANGE_Y.start) * 5.0
         / (RANGE_X.end - RANGE_X.start))
         * (WIDTH as f64))
         .floor() as u32;
+
+    let top_height = (((TOP_RANGE_Y.end - TOP_RANGE_Y.start) / (RANGE_X.end - RANGE_X.start))
+        * (WIDTH as f64))
+        .floor() as u32
+        - OVERLAP_OFFSET;
 
     let root_drawing_area = BitMapBackend::new(
         "test.png",
@@ -48,10 +50,12 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
     )
     .into_drawing_area();
     root_drawing_area.fill(&THEME_BG)?;
-    let (top, bottom) = root_drawing_area.split_vertically(top_height);
 
+    let (side, _) = root_drawing_area.split_vertically(side_height);
+    let (_, top) = root_drawing_area.split_vertically(side_height - OVERLAP_OFFSET);
+
+    draw_side_view(&track, side)?;
     draw_top_view(&track, top)?;
-    draw_side_view(&track, bottom)?;
 
     Ok(())
 }
@@ -63,7 +67,7 @@ pub fn draw_top_view(
 ) -> Result<(), DrawError> {
     let mut chart = ChartBuilder::on(&canvas)
         .margin(5)
-        .x_label_area_size(0)
+        .x_label_area_size(X_LABEL_AREA_SIZE)
         .y_label_area_size(0)
         .build_cartesian_2d(
             CustomRange(RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
@@ -74,7 +78,6 @@ pub fn draw_top_view(
     chart
         .configure_mesh()
         .disable_mesh()
-        .disable_x_axis()
         .disable_y_axis()
         .axis_style(THEME_FG)
         .x_label_style(text_style())
@@ -182,7 +185,7 @@ pub fn draw_side_view(
 ) -> Result<(), DrawError> {
     let mut chart = ChartBuilder::on(&canvas)
         .margin(5)
-        .x_label_area_size(X_LABEL_AREA_SIZE)
+        .x_label_area_size(0)
         .y_label_area_size(0)
         .build_cartesian_2d(
             CustomRange(RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
@@ -193,6 +196,7 @@ pub fn draw_side_view(
     chart
         .configure_mesh()
         .disable_mesh()
+        .disable_x_axis()
         .disable_y_axis()
         .axis_style(THEME_FG)
         .x_label_style(text_style())
@@ -345,9 +349,9 @@ impl Ranged for CustomRange {
 impl ValueFormatter<f64> for CustomRange {
     fn format(v: &f64) -> String {
         match *v {
-            v if (v - 0.25).abs() < f64::EPSILON => "¼nm".to_string(),
-            v if (v - 0.50).abs() < f64::EPSILON => "½nm".to_string(),
-            v if (v - 0.75).abs() < f64::EPSILON => "¾nm".to_string(),
+            v if (v - 0.25).abs() < f64::EPSILON => "¼ nm".to_string(),
+            v if (v - 0.50).abs() < f64::EPSILON => "½ nm".to_string(),
+            v if (v - 0.75).abs() < f64::EPSILON => "¾ nm".to_string(),
             _ => format!("{}nm", v),
         }
     }
