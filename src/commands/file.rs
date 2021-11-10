@@ -4,6 +4,7 @@ use std::ops::Neg;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use crate::draw::DrawError;
 use crate::tasks::detect_recovery::is_recovery_attempt;
 use crate::track::Track;
 use crate::transform::Transform;
@@ -15,7 +16,7 @@ pub struct Opts {
     input: PathBuf,
 }
 
-pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
     let start = Instant::now();
 
     let file = File::open(opts.input)?;
@@ -30,7 +31,7 @@ pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
         match record? {
             Record::Frame(secs) => {
                 for track in &mut tracks {
-                    track.process_frame();
+                    track.process_frame()?;
                 }
 
                 time = secs;
@@ -68,7 +69,7 @@ pub fn execute(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for track in &mut tracks {
-        track.draw();
+        track.draw()?;
     }
 
     println!("Took: {:.4}s", start.elapsed().as_secs_f64());
@@ -180,30 +181,34 @@ impl CarrierPlanePair {
         }
     }
 
-    fn process_frame(&mut self) {
+    fn process_frame(&mut self) -> Result<(), DrawError> {
         if !self.is_dirty {
-            return;
+            return Ok(());
         }
 
         self.is_dirty = false;
 
         if self.carrier.time == 0.0 || self.plane.time == 0.0 {
-            return;
+            return Ok(());
         }
 
         if self.is_recovery_attempt {
             if !self.datums.next(&self.carrier, &self.plane) {
-                self.draw();
+                self.draw()?;
             }
         } else if is_recovery_attempt(&self.carrier, &self.plane) {
             self.is_recovery_attempt = true;
         }
+
+        Ok(())
     }
 
-    fn draw(&mut self) {
+    fn draw(&mut self) -> Result<(), DrawError> {
         if self.is_recovery_attempt {
-            crate::draw::draw_chart(std::mem::take(&mut self.datums).finish());
+            crate::draw::draw_chart(std::mem::take(&mut self.datums).finish())?;
             self.is_recovery_attempt = false;
         }
+
+        Ok(())
     }
 }

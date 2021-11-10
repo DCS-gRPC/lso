@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use tonic::{transport::Channel, Status};
+use tonic::transport::Channel;
 
 use crate::client::UnitClient;
 use crate::transform::Transform;
@@ -13,7 +13,7 @@ pub async fn detect_recovery(
     carrier_name: String,
     plane_name: String,
     shutdown: ShutdownHandle,
-) -> Result<(), Status> {
+) -> Result<(), crate::error::Error> {
     // TODO: handle unit gone
     let mut client1 = UnitClient::new(ch.clone());
     let mut client2 = UnitClient::new(ch.clone());

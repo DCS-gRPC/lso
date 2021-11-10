@@ -50,7 +50,7 @@ struct Services {
     unit: UnitServiceClient<Channel>,
 }
 
-async fn run() -> Result<(), Error> {
+async fn run() -> Result<(), crate::error::Error> {
     let addr = "http://127.0.0.1:50051"; // TODO: move to config
     tracing::info!(endpoint = addr, "Connecting to gRPC server");
     let channel = Endpoint::from_static(addr)
@@ -68,7 +68,7 @@ async fn run() -> Result<(), Error> {
     Ok(())
 }
 
-async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error> {
+async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), crate::error::Error> {
     // initial full-sync of all current units inside of the mission
     let groups = futures_util::future::try_join_all(
         [Coalition::Blue, Coalition::Red, Coalition::Neutral].map(|coalition| {
@@ -163,16 +163,4 @@ async fn detect_recoveries(svc: &mut Services, ch: Channel) -> Result<(), Error>
     // TODO: listen on events for new carrier/plane pairs to observe
 
     Ok(())
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error(transparent)]
-    Grpc(#[from] tonic::Status),
-    #[error(transparent)]
-    Transport(#[from] tonic::transport::Error),
-    #[error(transparent)]
-    Fmt(#[from] std::fmt::Error),
-    #[error("failed to write ACMI file")]
-    Write(#[from] std::io::Error),
 }

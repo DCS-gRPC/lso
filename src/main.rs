@@ -2,6 +2,7 @@ mod client;
 mod commands;
 mod data;
 mod draw;
+mod error;
 mod tasks;
 mod track;
 mod transform;

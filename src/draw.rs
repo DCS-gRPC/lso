@@ -24,7 +24,7 @@ const THEME_TRACK_YELLOW: RGBColor = RGBColor(250, 204, 21);
 const THEME_TRACK_GREEN: RGBColor = RGBColor(132, 230, 53);
 
 #[tracing::instrument(skip_all)]
-pub fn draw_chart(track: TrackResult) {
+pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
     const WIDTH: u32 = 1000;
     const X_LABEL_AREA_SIZE: u32 = 30;
     const TOP_RANGE_X: Range<f64> = -0.02..0.76;
@@ -48,7 +48,7 @@ pub fn draw_chart(track: TrackResult) {
         (WIDTH, top_height + side_height + X_LABEL_AREA_SIZE),
     )
     .into_drawing_area();
-    root_drawing_area.fill(&THEME_BG).unwrap();
+    root_drawing_area.fill(&THEME_BG)?;
     let (top, bottom) = root_drawing_area.split_vertically(top_height);
 
     let mut chart = ChartBuilder::on(&top)
@@ -58,8 +58,7 @@ pub fn draw_chart(track: TrackResult) {
         .build_cartesian_2d(
             CustomRange(TOP_RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
             TOP_RANGE_Y,
-        )
-        .unwrap();
+        )?;
 
     // Then we can draw a mesh
     chart
@@ -69,8 +68,7 @@ pub fn draw_chart(track: TrackResult) {
         .disable_y_axis()
         .axis_style(THEME_FG)
         .x_label_style(text_style.clone())
-        .draw()
-        .unwrap();
+        .draw()?;
 
     // carrier top image is 300x300px which corresponds to 115x115m
     let (w, _h) = top.dim_in_pixel();
@@ -80,15 +78,14 @@ pub fn draw_chart(track: TrackResult) {
     let img_carrier_top = image::load_from_memory_with_format(
         include_bytes!("../img/carrier-top.png"),
         ImageFormat::Png,
-    )
-    .unwrap()
+    )?
     .resize_exact(img_size.0, img_size.1, FilterType::Nearest);
     let elem: BitMapElement<_> = (
         (-m_to_nm(115.0 * 1.0 / 3.0), m_to_nm(115.0 / 2.0)),
         img_carrier_top,
     )
         .into();
-    chart.draw_series(std::iter::once(elem)).unwrap();
+    chart.draw_series(std::iter::once(elem))?;
 
     // draw centerline
     // Source: A Review and Analysis of Precision Approach and Landing System (PALS) Certifification
@@ -106,18 +103,14 @@ pub fn draw_chart(track: TrackResult) {
 
     for (deg, color) in lines {
         let y = deg.to_radians().tan() * TOP_RANGE_X.end;
-        chart
-            .draw_series(LineSeries::new(
-                [(0.0, 0.0), (TOP_RANGE_X.end, y)],
-                color.mix(0.4),
-            ))
-            .unwrap();
-        chart
-            .draw_series(LineSeries::new(
-                [(0.0, 0.0), (TOP_RANGE_X.end, y.neg())],
-                color.mix(0.4),
-            ))
-            .unwrap();
+        chart.draw_series(LineSeries::new(
+            [(0.0, 0.0), (TOP_RANGE_X.end, y)],
+            color.mix(0.4),
+        ))?;
+        chart.draw_series(LineSeries::new(
+            [(0.0, 0.0), (TOP_RANGE_X.end, y.neg())],
+            color.mix(0.4),
+        ))?;
     }
 
     let track_in_nm = track
@@ -132,12 +125,10 @@ pub fn draw_chart(track: TrackResult) {
         .filter(|d| TOP_RANGE_X.contains(&d.x) && TOP_RANGE_Y.contains(&d.y));
 
     // draw approach shadow
-    chart
-        .draw_series(LineSeries::new(
-            track_in_nm.clone().map(|d| (d.x, d.y)),
-            THEME_BG.stroke_width(4),
-        ))
-        .unwrap();
+    chart.draw_series(LineSeries::new(
+        track_in_nm.clone().map(|d| (d.x, d.y)),
+        THEME_BG.stroke_width(4),
+    ))?;
 
     // draw approach
     let mut points = Vec::new();
@@ -153,12 +144,10 @@ pub fn draw_chart(track: TrackResult) {
         if next_color != color {
             points.push(point);
 
-            chart
-                .draw_series(LineSeries::new(
-                    points.iter().cloned(),
-                    color.stroke_width(2),
-                ))
-                .unwrap();
+            chart.draw_series(LineSeries::new(
+                points.iter().cloned(),
+                color.stroke_width(2),
+            ))?;
 
             points.clear();
             color = next_color;
@@ -168,12 +157,10 @@ pub fn draw_chart(track: TrackResult) {
     }
 
     if !points.is_empty() {
-        chart
-            .draw_series(LineSeries::new(
-                points.iter().cloned(),
-                color.stroke_width(2),
-            ))
-            .unwrap();
+        chart.draw_series(LineSeries::new(
+            points.iter().cloned(),
+            color.stroke_width(2),
+        ))?;
     }
 
     //
@@ -187,8 +174,7 @@ pub fn draw_chart(track: TrackResult) {
         .build_cartesian_2d(
             CustomRange(SIDE_RANGE_X.with_key_points(vec![0.25f64, 0.5, 0.75, 1.0])),
             SIDE_RANGE_Y,
-        )
-        .unwrap();
+        )?;
 
     // Then we can draw a mesh
     chart
@@ -197,19 +183,17 @@ pub fn draw_chart(track: TrackResult) {
         .disable_y_axis()
         .axis_style(THEME_FG)
         .x_label_style(text_style.clone())
-        .draw()
-        .unwrap();
+        .draw()?;
 
     // carrier side image is 300x150px which corresponds to 115x57.5m
     let img_size = ((115.0 * m2px) as u32, (57.5 * m2px) as u32);
     let img_carrier_side = image::load_from_memory_with_format(
         include_bytes!("../img/carrier-side.png"),
         ImageFormat::Png,
-    )
-    .unwrap()
+    )?
     .resize_exact(img_size.0, img_size.1, FilterType::Nearest);
     let elem: BitMapElement<_> = ((-m_to_nm(115.0 * 1.0 / 3.0), 24.0), img_carrier_side).into();
-    chart.draw_series(std::iter::once(elem)).unwrap();
+    chart.draw_series(std::iter::once(elem))?;
 
     // draw centerline
     let lines = [
@@ -229,9 +213,7 @@ pub fn draw_chart(track: TrackResult) {
             x = ft_to_nm(SIDE_RANGE_Y.end) / deg.to_radians().tan();
             y = SIDE_RANGE_Y.end;
         }
-        chart
-            .draw_series(LineSeries::new([(0.0, 0.0), (x, y)], color.mix(0.4)))
-            .unwrap();
+        chart.draw_series(LineSeries::new([(0.0, 0.0), (x, y)], color.mix(0.4)))?;
     }
 
     let track_descent = track
@@ -246,12 +228,10 @@ pub fn draw_chart(track: TrackResult) {
         .filter(|d| SIDE_RANGE_X.contains(&d.x) && SIDE_RANGE_Y.contains(&d.alt));
 
     // draw approach shadow
-    chart
-        .draw_series(LineSeries::new(
-            track_descent.clone().map(|d| (d.x, d.alt)),
-            THEME_BG.stroke_width(4),
-        ))
-        .unwrap();
+    chart.draw_series(LineSeries::new(
+        track_descent.clone().map(|d| (d.x, d.alt)),
+        THEME_BG.stroke_width(4),
+    ))?;
 
     // draw approach
     let mut points = Vec::new();
@@ -268,12 +248,10 @@ pub fn draw_chart(track: TrackResult) {
         if next_color != color {
             points.push(point);
 
-            chart
-                .draw_series(LineSeries::new(
-                    points.iter().cloned(),
-                    color.stroke_width(2),
-                ))
-                .unwrap();
+            chart.draw_series(LineSeries::new(
+                points.iter().cloned(),
+                color.stroke_width(2),
+            ))?;
 
             points.clear();
             color = next_color;
@@ -283,21 +261,19 @@ pub fn draw_chart(track: TrackResult) {
     }
 
     if !points.is_empty() {
-        chart
-            .draw_series(LineSeries::new(
-                points.iter().cloned(),
-                color.stroke_width(2),
-            ))
-            .unwrap();
+        chart.draw_series(LineSeries::new(
+            points.iter().cloned(),
+            color.stroke_width(2),
+        ))?;
     }
 
     if let Some(grading) = track.grading {
         if let Some(cable) = grading.cable {
-            bottom
-                .draw_text(&format!("Cable: {}", cable), &text_style, (8, 8))
-                .unwrap();
+            bottom.draw_text(&format!("Cable: {}", cable), &text_style, (8, 8))?;
         }
     }
+
+    Ok(())
 }
 
 fn aoa_color(aoa: f64) -> RGBColor {
@@ -355,4 +331,12 @@ impl ValueFormatter<f64> for CustomRange {
             _ => format!("{}nm", v),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DrawError {
+    #[error(transparent)]
+    Plotter(#[from] DrawingAreaErrorKind<<BitMapBackend<'static> as DrawingBackend>::ErrorType>),
+    #[error(transparent)]
+    Image(#[from] image::ImageError),
 }

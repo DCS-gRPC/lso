@@ -17,7 +17,7 @@ pub async fn record_recovery(
     carrier_name: String,
     plane_name: String,
     shutdown: ShutdownHandle,
-) -> Result<(), Status> {
+) -> Result<(), crate::error::Error> {
     tracing::debug!("start recording");
 
     // TODO: handle unit gone
@@ -118,7 +118,7 @@ pub async fn record_recovery(
 
     let data = acmi.into_inner();
     tokio::fs::write("./test.txt.acmi", &data).await?;
-    crate::draw::draw_chart(datums.finish());
+    crate::draw::draw_chart(datums.finish())?;
 
     Ok(())
 }
