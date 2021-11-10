@@ -13,17 +13,17 @@ use crate::data;
 use crate::track::{Datum, TrackResult};
 use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft, nm_to_m};
 
-const THEME_BG: RGBColor = RGBColor(30, 41, 49);
-const THEME_FG: RGBColor = RGBColor(203, 213, 225);
+const THEME_BG: RGBColor = RGBColor(31, 41, 55); // 1F2937
+const THEME_FG: RGBColor = RGBColor(156, 163, 175); // 9CA3AF
 
-const THEME_GUIDE_RED: RGBColor = RGBColor(248, 113, 113);
-const THEME_GUIDE_YELLOW: RGBColor = RGBColor(250, 204, 21);
-const THEME_GUIDE_GREEN: RGBColor = RGBColor(163, 230, 53);
-const THEME_GUIDE_GRAY: RGBColor = RGBColor(100, 116, 139);
+const THEME_GUIDE_RED: RGBColor = RGBColor(239, 68, 68); // EF4444
+const THEME_GUIDE_YELLOW: RGBColor = RGBColor(254, 240, 138); // FEF08A
+const THEME_GUIDE_GREEN: RGBColor = RGBColor(34, 197, 94); // 22C55E
+const THEME_GUIDE_GRAY: RGBColor = RGBColor(100, 116, 139); // 64748B
 
-const THEME_TRACK_RED: RGBColor = RGBColor(248, 113, 113);
-const THEME_TRACK_YELLOW: RGBColor = RGBColor(250, 204, 21);
-const THEME_TRACK_GREEN: RGBColor = RGBColor(132, 230, 53);
+const THEME_TRACK_RED: RGBColor = RGBColor(239, 68, 68); // EF4444
+const THEME_TRACK_YELLOW: RGBColor = RGBColor(254, 240, 138); // FEF08A
+const THEME_TRACK_GREEN: RGBColor = RGBColor(34, 197, 94); // 22C55E
 
 const WIDTH: u32 = 1000;
 const X_LABEL_AREA_SIZE: u32 = 30;
