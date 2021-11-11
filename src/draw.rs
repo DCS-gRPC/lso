@@ -62,6 +62,28 @@ pub fn draw_chart(
     draw_side_view(&track, side)?;
     draw_top_view(&track, top)?;
 
+    let text_style = TextStyle::from(("sans-serif", 24).into_font()).color(&THEME_FG);
+
+    root_drawing_area.draw_text(
+        &format!("Pilot: {}", track.pilot_name),
+        &text_style,
+        (16, 16),
+    )?;
+
+    root_drawing_area.draw_text(
+        &format!(
+            "Cable: {}",
+            track
+                .grading
+                .cable
+                .map(|c| c.to_string())
+                .as_deref()
+                .unwrap_or("-")
+        ),
+        &text_style,
+        (16, 48),
+    )?;
+
     Ok(())
 }
 
@@ -290,12 +312,6 @@ pub fn draw_side_view(
             points.iter().cloned(),
             color.stroke_width(2),
         ))?;
-    }
-
-    if let Some(grading) = &track.grading {
-        if let Some(cable) = grading.cable {
-            canvas.draw_text(&format!("Cable: {}", cable), &text_style(), (8, 8))?;
-        }
     }
 
     Ok(())

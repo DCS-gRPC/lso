@@ -14,31 +14,33 @@ pub struct Datum {
 }
 
 pub struct Track {
+    pilot_name: String,
     previous_distance: f64,
     datums: Vec<Datum>,
     grading: Option<Grading>,
 }
 
+#[derive(Debug, Default)]
 pub struct Grading {
     pub cable: Option<u8>,
 }
 
 pub struct TrackResult {
-    pub grading: Option<Grading>,
+    pub pilot_name: String,
+    pub grading: Grading,
     pub datums: Vec<Datum>,
 }
 
-impl Default for Track {
-    fn default() -> Self {
+impl Track {
+    pub fn new(pilot_name: impl Into<String>) -> Self {
         Self {
+            pilot_name: pilot_name.into(),
             previous_distance: f64::MAX,
             datums: Default::default(),
             grading: None,
         }
     }
-}
 
-impl Track {
     pub fn next(&mut self, carrier: &Transform, plane: &Transform) -> bool {
         // TODO: select carrier and plane according to actual units
         let landing_pos_offset = data::NIMITZ
@@ -102,7 +104,8 @@ impl Track {
 
     pub fn finish(self) -> TrackResult {
         TrackResult {
-            grading: self.grading,
+            pilot_name: self.pilot_name,
+            grading: self.grading.unwrap_or_default(),
             datums: self.datums,
         }
     }

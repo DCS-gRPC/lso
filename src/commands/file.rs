@@ -147,7 +147,7 @@ impl CarrierPlanePair {
             plane: Default::default(),
             is_recovery_attempt: false,
             is_dirty: false,
-            datums: Track::default(),
+            datums: Track::new(pilot_name),
         }
     }
 
@@ -216,14 +216,9 @@ impl CarrierPlanePair {
                         self.is_dirty = true;
                     }
                 }
-                // Property::Name(name) => {
-                //     self.name = Some(name);
-                //     self.dirty = true;
-                // }
-                // Property::Pilot(pilot) => {
-                //     self.pilot = Some(pilot);
-                //     self.dirty = true;
-                // }
+                Property::Pilot(pilot_name) => {
+                    self.pilot_name = pilot_name.to_string();
+                }
                 Property::AOA(aoa) => {
                     transform.aoa = *aoa;
                 }
@@ -270,7 +265,7 @@ impl CarrierPlanePair {
             crate::draw::draw_chart(
                 &out_dir,
                 &filename,
-                std::mem::take(&mut self.datums).finish(),
+                std::mem::replace(&mut self.datums, Track::new(&self.pilot_name)).finish(),
             )?;
             self.is_recovery_attempt = false;
         }

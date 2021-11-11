@@ -50,7 +50,7 @@ pub async fn record_recovery(
 
     let mut acmi = Cursor::new(Vec::new());
     let mut recording = tacview::Writer::new_compressed(&mut acmi)?;
-    let mut datums = Track::default();
+    let mut datums = Track::new(pilot_name);
 
     let reference_time = mission.get_scenario_start_time().await?;
     recording.write(GlobalProperty::ReferenceTime(reference_time))?;
