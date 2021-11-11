@@ -111,6 +111,7 @@ pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
     }
 
     for track in &mut tracks {
+        track.process_frame()?;
         track.draw()?;
     }
 
