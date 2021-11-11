@@ -1,6 +1,7 @@
 .*
 !.gitignore
 /target
-test*
-Tacview*
+/tests
+/*.png
+/*.acmi
 notes*

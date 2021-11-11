@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::ops::Neg;
 use std::path::PathBuf;
@@ -6,9 +6,12 @@ use std::time::Instant;
 
 use crate::draw::DrawError;
 use crate::tasks::detect_recovery::is_recovery_attempt;
+use crate::tasks::record_recovery::FILENAME_DATETIME_FORMAT;
 use crate::track::Track;
 use crate::transform::Transform;
-use tacview::record::{Property, Record, Tag, Update};
+use tacview::record::{GlobalProperty, Property, Record, Tag, Update};
+use time::format_description::well_known::Rfc3339;
+use time::{Duration, OffsetDateTime, UtcOffset};
 use ultraviolet::{DRotor3, DVec3};
 
 #[derive(clap::Parser)]
@@ -19,16 +22,28 @@ pub struct Opts {
 pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
     let start = Instant::now();
 
-    let file = File::open(opts.input)?;
-    let parser = tacview::Parser::new(file)?;
+    let mut file = File::open(opts.input)?;
+    let parser = tacview::Parser::new_compressed(&mut file)?;
 
+    let mut recording_time =
+        OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
     let mut carriers: HashSet<u64> = HashSet::new();
-    let mut planes: HashSet<u64> = HashSet::new();
+    let mut planes: HashMap<u64, String> = HashMap::new();
     let mut tracks: Vec<CarrierPlanePair> = Vec::new();
 
     let mut time = 0.0;
     for record in parser {
         match record? {
+            Record::GlobalProperty(GlobalProperty::RecordingTime(time)) => {
+                if let Ok(time) = OffsetDateTime::parse(&time, &Rfc3339) {
+                    recording_time = if let Ok(offset) = UtcOffset::current_local_offset() {
+                        time.to_offset(offset)
+                    } else {
+                        time
+                    };
+                }
+            }
+
             Record::Frame(secs) => {
                 for track in &mut tracks {
                     track.process_frame()?;
@@ -38,23 +53,50 @@ pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
             }
 
             Record::Update(update) => {
-                if !carriers.contains(&update.id) && !planes.contains(&update.id) {
-                    for p in &update.props {
-                        // TODO: filter players
-                        if let Property::Type(tags) = p {
-                            if tags.contains(&Tag::AircraftCarrier) {
-                                for plane_id in &planes {
-                                    tracks.push(CarrierPlanePair::new(update.id, *plane_id));
-                                }
-
-                                carriers.insert(update.id);
-                            } else if tags.contains(&Tag::FixedWing) {
-                                for carrier_id in &carriers {
-                                    tracks.push(CarrierPlanePair::new(*carrier_id, update.id));
-                                }
-
-                                planes.insert(update.id);
+                if !carriers.contains(&update.id) && !planes.contains_key(&update.id) {
+                    let pilot_name = update
+                        .props
+                        .iter()
+                        .find_map(|p| {
+                            if let Property::Pilot(pilot_name) = p {
+                                Some(pilot_name.as_str())
+                            } else {
+                                None
                             }
+                        })
+                        .unwrap_or("KI");
+                    let tags = update.props.iter().find_map(|p| {
+                        if let Property::Type(tags) = p {
+                            Some(tags)
+                        } else {
+                            None
+                        }
+                    });
+
+                    if let Some(tags) = tags {
+                        if tags.contains(&Tag::AircraftCarrier) {
+                            for (plane_id, pilot_name) in &planes {
+                                tracks.push(CarrierPlanePair::new(
+                                    recording_time + Duration::seconds_f64(time),
+                                    update.id,
+                                    *plane_id,
+                                    pilot_name,
+                                ));
+                            }
+
+                            carriers.insert(update.id);
+                        } else if tags.contains(&Tag::FixedWing) {
+                            // TODO: filter players
+                            for carrier_id in &carriers {
+                                tracks.push(CarrierPlanePair::new(
+                                    recording_time + Duration::seconds_f64(time),
+                                    *carrier_id,
+                                    update.id,
+                                    pilot_name,
+                                ));
+                            }
+
+                            planes.insert(update.id, pilot_name.to_string());
                         }
                     }
                 }
@@ -78,6 +120,8 @@ pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
 }
 
 struct CarrierPlanePair {
+    recording_time: OffsetDateTime,
+    pilot_name: String,
     carrier_id: u64,
     carrier: Transform,
     plane_id: u64,
@@ -88,8 +132,15 @@ struct CarrierPlanePair {
 }
 
 impl CarrierPlanePair {
-    fn new(carrier_id: u64, plane_id: u64) -> Self {
+    fn new(
+        recording_time: OffsetDateTime,
+        carrier_id: u64,
+        plane_id: u64,
+        pilot_name: &str,
+    ) -> Self {
         Self {
+            recording_time,
+            pilot_name: pilot_name.to_string(),
             carrier_id,
             carrier: Default::default(),
             plane_id,
@@ -205,7 +256,22 @@ impl CarrierPlanePair {
 
     fn draw(&mut self) -> Result<(), DrawError> {
         if self.is_recovery_attempt {
-            crate::draw::draw_chart(std::mem::take(&mut self.datums).finish())?;
+            let out_dir = PathBuf::from(".");
+            let filename = format!(
+                "LSO-{}-{}",
+                self.recording_time
+                    .format(&FILENAME_DATETIME_FORMAT)
+                    .unwrap_or_default(),
+                self.pilot_name
+                    .chars()
+                    .filter(|c| c.is_ascii_alphanumeric())
+                    .collect::<String>()
+            );
+            crate::draw::draw_chart(
+                &out_dir,
+                &filename,
+                std::mem::take(&mut self.datums).finish(),
+            )?;
             self.is_recovery_attempt = false;
         }
 

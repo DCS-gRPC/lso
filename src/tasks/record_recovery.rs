@@ -1,24 +1,46 @@
 use std::collections::HashSet;
 use std::io::Cursor;
+use std::path::Path;
 use std::time::Duration;
 
 use futures_util::StreamExt;
+use once_cell::sync::Lazy;
 use stubs::common::v0::Coalition;
 use tacview::record::{Color, Coords, GlobalProperty, Property, Record, Tag, Update};
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 use tonic::{transport::Channel, Status};
 
 use crate::client::{HookClient, MissionClient, UnitClient};
 use crate::track::Track;
 use crate::utils::shutdown::ShutdownHandle;
 
-#[tracing::instrument(skip(ch, shutdown))]
+pub static FILENAME_DATETIME_FORMAT: Lazy<Vec<time::format_description::FormatItem<'_>>> =
+    Lazy::new(|| {
+        time::format_description::parse("[year][month][day]-[hour][minute][second]").unwrap()
+    });
+
+#[tracing::instrument(skip(out_dir, ch, pilot_name, shutdown))]
 pub async fn record_recovery(
+    out_dir: &Path,
     ch: Channel,
     carrier_name: &str,
     plane_name: &str,
+    pilot_name: &str,
     shutdown: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
     tracing::debug!("started recording");
+
+    // Tacview-20211111-143727-DCS-grpc-lso.zip
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let filename = format!(
+        "LSO-{}-{}",
+        now.format(&FILENAME_DATETIME_FORMAT).unwrap_or_default(),
+        pilot_name
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+    );
 
     let mut client1 = UnitClient::new(ch.clone());
     let mut client2 = UnitClient::new(ch.clone());
@@ -32,6 +54,9 @@ pub async fn record_recovery(
 
     let reference_time = mission.get_scenario_start_time().await?;
     recording.write(GlobalProperty::ReferenceTime(reference_time))?;
+    recording.write(GlobalProperty::RecordingTime(
+        OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+    ))?;
 
     let mission_name = hook.get_mission_name().await?;
     recording.write(GlobalProperty::Title(format!(
@@ -116,8 +141,8 @@ pub async fn record_recovery(
 
     recording.into_inner();
     let data = acmi.into_inner();
-    tokio::fs::write("./test.zip.acmi", &data).await?;
-    crate::draw::draw_chart(datums.finish())?;
+    tokio::fs::write(out_dir.join(&filename).with_extension("zip.acmi"), &data).await?;
+    crate::draw::draw_chart(out_dir, &filename, datums.finish())?;
 
     Ok(())
 }

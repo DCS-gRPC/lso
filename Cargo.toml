@@ -18,6 +18,7 @@ serde_json = { version = "1.0" }
 stubs = { package = "dcs-grpc-stubs", path = "../DCS-gRPC/rust-server/stubs", features = ["client"] }
 tacview = { version = "0.1" } # path = "../tacview" }
 thiserror = "1.0"
+time = { version = "0.3", features = ["local-offset", "formatting", "parsing"] }
 tokio =  { version = "1.2", features = ["rt-multi-thread", "macros", "signal", "fs", "sync"] }
 tonic = "0.6"
 tracing = "0.1"

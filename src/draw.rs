@@ -7,7 +7,9 @@ use plotters::coord::ranged1d::ValueFormatter;
 use plotters::coord::types::RangedCoordf64;
 use plotters::coord::Shift;
 use plotters::prelude::*;
+use plotters::style::{Color, IntoFont, RGBColor, TextStyle};
 use plotters_bitmap::bitmap_pixel::RGBPixel;
+use plotters_bitmap::BitMapBackend;
 
 use crate::data;
 use crate::track::{Datum, TrackResult};
@@ -33,7 +35,11 @@ const SIDE_RANGE_Y: Range<f64> = 0.0..350.0;
 const OVERLAP_OFFSET: u32 = 130;
 
 #[tracing::instrument(skip_all)]
-pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
+pub fn draw_chart(
+    out_dir: &std::path::Path,
+    filename: &str,
+    track: TrackResult,
+) -> Result<(), DrawError> {
     let side_height = ((ft_to_nm(SIDE_RANGE_Y.end - SIDE_RANGE_Y.start) * 5.0
         / (RANGE_X.end - RANGE_X.start))
         * (WIDTH as f64))
@@ -44,11 +50,10 @@ pub fn draw_chart(track: TrackResult) -> Result<(), DrawError> {
         .floor() as u32
         - OVERLAP_OFFSET;
 
-    let root_drawing_area = BitMapBackend::new(
-        "test.png",
-        (WIDTH, top_height + side_height + X_LABEL_AREA_SIZE),
-    )
-    .into_drawing_area();
+    let path = out_dir.join(filename).with_extension("png");
+    let root_drawing_area =
+        BitMapBackend::new(&path, (WIDTH, top_height + side_height + X_LABEL_AREA_SIZE))
+            .into_drawing_area();
     root_drawing_area.fill(&THEME_BG)?;
 
     let (side, _) = root_drawing_area.split_vertically(side_height);

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -8,11 +9,13 @@ use crate::client::UnitClient;
 use crate::transform::Transform;
 use crate::utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle};
 
-#[tracing::instrument(skip(ch, shutdown))]
+#[tracing::instrument(skip(out_dir, ch, pilot_name, shutdown))]
 pub async fn detect_recovery(
+    out_dir: &Path,
     ch: Channel,
     carrier_name: &str,
     plane_name: &str,
+    pilot_name: &str,
     shutdown: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
     tracing::debug!("started observing for possible recovery attempts");
@@ -44,7 +47,15 @@ pub async fn detect_recovery(
         }
     }
 
-    super::record_recovery::record_recovery(ch, carrier_name, plane_name, shutdown).await?;
+    super::record_recovery::record_recovery(
+        out_dir,
+        ch,
+        carrier_name,
+        plane_name,
+        pilot_name,
+        shutdown,
+    )
+    .await?;
 
     Ok(())
 }
