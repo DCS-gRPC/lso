@@ -27,8 +27,7 @@ pub async fn record_recovery(
     let mut interval = crate::utils::interval::interval(Duration::from_millis(150), shutdown);
 
     let mut acmi = Cursor::new(Vec::new());
-    // TODO: compressed
-    let mut recording = tacview::Writer::new(&mut acmi)?;
+    let mut recording = tacview::Writer::new_compressed(&mut acmi)?;
     let mut datums = Track::default();
 
     let reference_time = mission.get_scenario_start_time().await?;
@@ -115,8 +114,9 @@ pub async fn record_recovery(
         }
     }
 
+    recording.into_inner();
     let data = acmi.into_inner();
-    tokio::fs::write("./test.txt.acmi", &data).await?;
+    tokio::fs::write("./test.zip.acmi", &data).await?;
     crate::draw::draw_chart(datums.finish())?;
 
     Ok(())
