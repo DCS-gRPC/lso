@@ -91,11 +91,11 @@ impl Track {
         });
 
         // Detect touchdown based on whether the hook's end touches the deck.
-        if self.grading.is_none() && alt <= 0.01 {
+        if self.grading.is_none() && alt <= 0.1 {
             self.grading = Some(Grading {
                 cable: get_cable(carrier, plane),
             });
-            tracing::debug!(distance_in_m = distance, "stop tracking");
+            tracing::debug!(distance_in_m = distance, alt, "stop tracking");
             return false;
         }
 
@@ -113,18 +113,7 @@ impl Track {
 
 fn get_cable(carrier: &Transform, plane: &Transform) -> Option<u8> {
     let hook_offset = data::FA18C.hook.rotated_by(plane.rotation);
-    let alt = plane.alt - data::NIMITZ.deck_altitude + hook_offset.y;
-
-    // Compensate the hook position based on how much the hook gets moved up and aft the aircraft
-    // on touchdown on the deck.
-    let hook_joint = data::FA18C.hook_joint.rotated_by(plane.rotation);
-    let hook = hook_offset - hook_joint;
-    let hook_length = hook.mag();
-    let offset = (hook_length.powi(2) - (-hook.y + alt).powi(2)).sqrt();
-
-    // Calculate touchdown position of the hook's end on the deck.
-    let new_hook = DVec3::new(hook.x, hook.y - alt, offset.neg());
-    let touchdown = plane.position + (hook_joint + new_hook);
+    let touchdown = plane.position + hook_offset;
 
     let cables = [
         (1, &data::NIMITZ.cable1),
@@ -138,12 +127,22 @@ fn get_cable(carrier: &Transform, plane: &Transform) -> Option<u8> {
         //       ^
         //       |
         let mid_cable = (pendants.0 - pendants.1) / 2.0;
-        let mid_cable = pendants.0 + mid_cable;
+        let mid_cable = pendants.0 - mid_cable;
+
+        // compensate for cable hitbox
+        let mid_cable = mid_cable + (carrier.forward * 2.0);
+
         let mid_cable = carrier.position + mid_cable.rotated_by(carrier.rotation);
 
         // If the cable is in front of the touchdown position, consider it the one the plane
         // catches.
         let ray_to_cable = mid_cable - touchdown;
+        tracing::trace!(
+            cable = nr,
+            distance = ray_to_cable.mag(),
+            dot = ray_to_cable.dot(plane.forward),
+            "cable candidate"
+        );
         if ray_to_cable.dot(plane.forward) > 0.0 {
             return Some(nr);
         }
