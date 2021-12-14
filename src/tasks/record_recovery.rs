@@ -161,15 +161,40 @@ pub async fn record_recovery(
                 }
             }
             Either::Right(event) => match event? {
-                Event::LandingQualityMark(LandingQualityMarkEvent {
-                    initiator:
-                        Some(Initiator {
-                            initiator: Some(initiator::Initiator::Unit(unit)),
-                        }),
-                    comment,
-                }) if unit.name == plane_name => {
+                (
+                    time,
+                    Event::LandingQualityMark(LandingQualityMarkEvent {
+                        initiator:
+                            Some(Initiator {
+                                initiator: Some(initiator::Initiator::Unit(plane)),
+                            }),
+                        place: Some(carrier),
+                        comment,
+                    }),
+                ) if plane.name == plane_name && carrier.name == carrier_name => {
                     tracing::info!(%comment, "landing quality mark event");
                     datums.set_dcs_grading(comment.clone());
+                    recording.write(Record::Frame(time))?;
+                    if let Some(pos) = carrier.position {
+                        recording.write(Update {
+                            id: 1,
+                            props: vec![Property::T(Coords::default().position(
+                                pos.lat - lat_ref,
+                                pos.lon - lon_ref,
+                                pos.alt,
+                            ))],
+                        })?;
+                    }
+                    if let Some(pos) = plane.position {
+                        recording.write(Update {
+                            id: 2,
+                            props: vec![Property::T(Coords::default().position(
+                                pos.lat - lat_ref,
+                                pos.lon - lon_ref,
+                                pos.alt,
+                            ))],
+                        })?;
+                    }
                     recording.write(record::Event {
                         kind: record::EventKind::Landed,
                         params: vec!["2".to_string()],
@@ -177,14 +202,38 @@ pub async fn record_recovery(
                     })?;
                 }
 
-                Event::Land(LandEvent {
-                    initiator:
-                        Some(Initiator {
-                            initiator: Some(initiator::Initiator::Unit(unit)),
-                        }),
-                    place: Some(carrier),
-                }) if unit.name == plane_name && carrier.name == carrier_name => {
+                (
+                    time,
+                    Event::Land(LandEvent {
+                        initiator:
+                            Some(Initiator {
+                                initiator: Some(initiator::Initiator::Unit(plane)),
+                            }),
+                        place: Some(carrier),
+                    }),
+                ) if plane.name == plane_name && carrier.name == carrier_name => {
                     tracing::info!("land event");
+                    recording.write(Record::Frame(time))?;
+                    if let Some(pos) = carrier.position {
+                        recording.write(Update {
+                            id: 1,
+                            props: vec![Property::T(Coords::default().position(
+                                pos.lat - lat_ref,
+                                pos.lon - lon_ref,
+                                pos.alt,
+                            ))],
+                        })?;
+                    }
+                    if let Some(pos) = plane.position {
+                        recording.write(Update {
+                            id: 2,
+                            props: vec![Property::T(Coords::default().position(
+                                pos.lat - lat_ref,
+                                pos.lon - lon_ref,
+                                pos.alt,
+                            ))],
+                        })?;
+                    }
                     recording.write(record::Event {
                         kind: record::EventKind::Landed,
                         params: vec!["2".to_string()],

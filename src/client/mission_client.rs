@@ -28,7 +28,7 @@ impl MissionClient {
 
     pub async fn stream_events(
         &mut self,
-    ) -> Result<impl Stream<Item = Result<Event, Status>>, Status> {
+    ) -> Result<impl Stream<Item = Result<(f64, Event), Status>>, Status> {
         let events = self
             .svc
             .stream_events(mission::v0::StreamEventsRequest {})
@@ -37,8 +37,10 @@ impl MissionClient {
             .filter_map(|event| {
                 ready(match event {
                     Ok(stubs::mission::v0::StreamEventsResponse {
-                        event: Some(event), ..
-                    }) => Some(Ok(event)),
+                        time,
+                        event: Some(event),
+                        ..
+                    }) => Some(Ok((time, event))),
                     Err(err) => Some(Err(err)),
                     Ok(_) => None,
                 })
