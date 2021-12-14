@@ -196,6 +196,17 @@ async fn run<'a>(
                 tracing::info!(unit = %unit.name, %comment, "LandingQualityMarkEvent");
             }
 
+            if let Event::Land(mission::v0::stream_events_response::LandEvent {
+                initiator:
+                    Some(common::v0::Initiator {
+                        initiator: Some(common::v0::initiator::Initiator::Unit(unit)),
+                    }),
+                place: Some(airbase),
+            }) = &event
+            {
+                tracing::info!(unit = %unit.name, place = %airbase.name, "LandEvent");
+            }
+
             if let Event::Birth(mission::v0::stream_events_response::BirthEvent {
                 initiator:
                     Some(common::v0::Initiator {
