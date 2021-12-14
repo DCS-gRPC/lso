@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::Path;
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use once_cell::sync::Lazy;
@@ -80,6 +80,7 @@ pub async fn record_recovery(
 
     let mut known_carrier_coords = None;
     let mut known_plane_coords = None;
+    let mut track_stopped = None;
 
     while interval.next().await.is_some() {
         let (carrier, plane) = futures_util::future::try_join(
@@ -138,8 +139,15 @@ pub async fn record_recovery(
             recording.write(carrier_update)?;
         }
 
-        if !datums.next(&carrier, &plane) {
-            break;
+        if track_stopped.is_none() && !datums.next(&carrier, &plane) {
+            // don't stop right away, track a couple of more seconds
+            track_stopped = Some(Instant::now());
+        }
+
+        if let Some(track_stopped) = track_stopped {
+            if track_stopped.elapsed() > Duration::from_secs(10) {
+                break;
+            }
         }
     }
 
