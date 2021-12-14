@@ -35,7 +35,16 @@ pub async fn detect_recovery(
         match result {
             Ok((carrier, plane)) => {
                 if is_recovery_attempt(&carrier, &plane) {
-                    break;
+                    super::record_recovery::record_recovery(
+                        out_dir,
+                        discord_webhook.clone(),
+                        ch.clone(),
+                        carrier_name,
+                        plane_name,
+                        pilot_name,
+                        shutdown.clone(),
+                    )
+                    .await?;
                 }
             }
             Err(status) if status.code() == Code::NotFound => {
@@ -47,17 +56,6 @@ pub async fn detect_recovery(
             }
         }
     }
-
-    super::record_recovery::record_recovery(
-        out_dir,
-        discord_webhook,
-        ch,
-        carrier_name,
-        plane_name,
-        pilot_name,
-        shutdown,
-    )
-    .await?;
 
     Ok(())
 }
