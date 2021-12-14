@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
+use crate::tasks::TaskParams;
 use crate::utils::shutdown::ShutdownHandle;
 use backoff::ExponentialBackoff;
 use futures_util::future::select;
@@ -20,17 +23,29 @@ use tonic::Status;
 pub struct Opts {
     #[clap(short = 'o', long, default_value = ".")]
     out_dir: PathBuf,
-    #[clap(long, env)]
+    #[clap(long)]
     discord_webhook: Option<String>,
+    #[clap(long)]
+    discord_users: Option<PathBuf>,
 }
 
-pub async fn execute(opts: Opts, shutdown_handle: ShutdownHandle) {
+pub async fn execute(
+    opts: Opts,
+    shutdown_handle: ShutdownHandle,
+) -> Result<(), crate::error::Error> {
     if opts.discord_webhook.is_some() {
         tracing::info!("Discord integration enabled.");
     }
 
     let addr = "http://127.0.0.1:50051"; // TODO: move to config
     tracing::info!(endpoint = addr, "Connecting to gRPC server");
+
+    let users: Arc<HashMap<String, u64>> =
+        Arc::new(if let Some(path) = opts.discord_users.as_deref() {
+            serde_json::from_slice(&tokio::fs::read(path).await?)?
+        } else {
+            Default::default()
+        });
 
     let backoff = ExponentialBackoff {
         // never wait longer than 30s for a retry
@@ -46,7 +61,7 @@ pub async fn execute(opts: Opts, shutdown_handle: ShutdownHandle) {
             // on each try, run the program and consider every error as transient (ie. worth
             // retrying)
             || async {
-                run(&opts, addr, shutdown_handle.clone())
+                run(&opts, addr, users.clone(), shutdown_handle.clone())
                     .await
                     .map_err(backoff::Error::Transient)
             },
@@ -62,11 +77,14 @@ pub async fn execute(opts: Opts, shutdown_handle: ShutdownHandle) {
         shutdown_handle.signal(),
     )
     .await;
+
+    Ok(())
 }
 
 async fn run<'a>(
     opts: &'a Opts,
     addr: &'static str,
+    users: Arc<HashMap<String, u64>>,
     shutdown_handle: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
     let out_dir = opts.out_dir.clone();
@@ -138,19 +156,21 @@ async fn run<'a>(
         move |carrier_name: String, plane_name: String, pilot_name: String| {
             let out_dir = out_dir.clone();
             let discord_webhook = discord_webhook.clone();
+            let users = users.clone();
             let channel = channel.clone();
             let tx = tx2.clone();
             let shutdown_handle = shutdown_handle.clone();
             tokio::spawn(async move {
-                if let Err(err) = crate::tasks::detect_recovery::detect_recovery(
-                    &out_dir,
+                if let Err(err) = crate::tasks::detect_recovery::detect_recovery(TaskParams {
+                    out_dir: &out_dir,
                     discord_webhook,
-                    channel,
-                    &carrier_name,
-                    &plane_name,
-                    &pilot_name,
-                    shutdown_handle,
-                )
+                    users,
+                    ch: channel,
+                    carrier_name: &carrier_name,
+                    plane_name: &plane_name,
+                    pilot_name: &pilot_name,
+                    shutdown: shutdown_handle,
+                })
                 .await
                 {
                     tx.send(err).await.ok();

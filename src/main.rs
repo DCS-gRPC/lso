@@ -54,7 +54,7 @@ async fn main() {
     });
 
     match opts.command {
-        Command::Run(opts) => commands::run::execute(opts, shutdown_handle).await,
+        Command::Run(opts) => commands::run::execute(opts, shutdown_handle).await.unwrap(),
         // TODO: better error report than unwrap?
         Command::File(opts) => commands::file::execute(opts).unwrap(),
     }

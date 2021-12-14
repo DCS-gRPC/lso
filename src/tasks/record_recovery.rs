@@ -1,6 +1,6 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::io::Cursor;
-use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -10,32 +10,30 @@ use futures_util::StreamExt;
 use once_cell::sync::Lazy;
 use serenity::http::Http;
 use serenity::model::channel::Embed;
+use serenity::model::id::UserId;
+use serenity::model::misc::Mention;
 use stubs::common::v0::{initiator, Coalition, Initiator};
 use stubs::mission::v0::stream_events_response::{Event, LandEvent, LandingQualityMarkEvent};
 use tacview::record::{self, Color, Coords, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-use tonic::{transport::Channel, Status};
+use tonic::Status;
 
 use crate::client::{HookClient, MissionClient, UnitClient};
 use crate::track::Track;
-use crate::utils::shutdown::ShutdownHandle;
+
+use super::TaskParams;
 
 pub static FILENAME_DATETIME_FORMAT: Lazy<Vec<time::format_description::FormatItem<'_>>> =
     Lazy::new(|| {
         time::format_description::parse("[year][month][day]-[hour][minute][second]").unwrap()
     });
 
-#[tracing::instrument(skip(out_dir, ch, pilot_name, shutdown))]
-pub async fn record_recovery(
-    out_dir: &Path,
-    discord_webhook: Option<String>,
-    ch: Channel,
-    carrier_name: &str,
-    plane_name: &str,
-    pilot_name: &str,
-    shutdown: ShutdownHandle,
-) -> Result<(), crate::error::Error> {
+#[tracing::instrument(
+        skip_all,
+        fields(carrier_name = params.carrier_name, plane_name = params.plane_name)
+    )]
+pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error::Error> {
     tracing::debug!("started recording");
 
     // Tacview-20211111-143727-DCS-grpc-lso.zip
@@ -43,21 +41,22 @@ pub async fn record_recovery(
     let filename = format!(
         "LSO-{}-{}",
         now.format(&FILENAME_DATETIME_FORMAT).unwrap_or_default(),
-        pilot_name
+        params
+            .pilot_name
             .chars()
             .filter(|c| c.is_ascii_alphanumeric())
             .collect::<String>()
     );
 
-    let mut client1 = UnitClient::new(ch.clone());
-    let mut client2 = UnitClient::new(ch.clone());
-    let mut mission = MissionClient::new(ch.clone());
-    let mut hook = HookClient::new(ch.clone());
-    let interval = crate::utils::interval::interval(Duration::from_millis(100), shutdown);
+    let mut client1 = UnitClient::new(params.ch.clone());
+    let mut client2 = UnitClient::new(params.ch.clone());
+    let mut mission = MissionClient::new(params.ch.clone());
+    let mut hook = HookClient::new(params.ch.clone());
+    let interval = crate::utils::interval::interval(Duration::from_millis(100), params.shutdown);
 
     let mut acmi = Cursor::new(Vec::new());
     let mut recording = tacview::Writer::new_compressed(&mut acmi)?;
-    let mut datums = Track::new(pilot_name);
+    let mut datums = Track::new(params.pilot_name);
 
     let reference_time = mission.get_scenario_start_time().await?;
     recording.write(GlobalProperty::ReferenceTime(reference_time))?;
@@ -78,8 +77,8 @@ pub async fn record_recovery(
     let mut lat_ref = 0.0;
     let mut lon_ref = 0.0;
 
-    recording.write(create_initial_update(&mut client1, 1, carrier_name).await?)?;
-    recording.write(create_initial_update(&mut client1, 2, plane_name).await?)?;
+    recording.write(create_initial_update(&mut client1, 1, params.carrier_name).await?)?;
+    recording.write(create_initial_update(&mut client1, 2, params.plane_name).await?)?;
 
     let events = mission.stream_events().await?;
 
@@ -94,8 +93,8 @@ pub async fn record_recovery(
             // next interval
             Either::Left(_) => {
                 let (carrier, plane) = futures_util::future::try_join(
-                    client1.get_transform(carrier_name),
-                    client2.get_transform(plane_name),
+                    client1.get_transform(params.carrier_name),
+                    client2.get_transform(params.plane_name),
                 )
                 .await?;
 
@@ -171,7 +170,7 @@ pub async fn record_recovery(
                         place: Some(carrier),
                         comment,
                     }),
-                ) if plane.name == plane_name && carrier.name == carrier_name => {
+                ) if plane.name == params.plane_name && carrier.name == params.carrier_name => {
                     tracing::info!(%comment, "landing quality mark event");
                     datums.set_dcs_grading(comment.clone());
                     recording.write(Record::Frame(time))?;
@@ -211,7 +210,7 @@ pub async fn record_recovery(
                             }),
                         place: Some(carrier),
                     }),
-                ) if plane.name == plane_name && carrier.name == carrier_name => {
+                ) if plane.name == params.plane_name && carrier.name == params.carrier_name => {
                     tracing::info!("land event");
                     recording.write(Record::Frame(time))?;
                     if let Some(pos) = carrier.position {
@@ -248,12 +247,12 @@ pub async fn record_recovery(
 
     recording.into_inner();
     let data = acmi.into_inner();
-    let acmi_path = out_dir.join(&filename).with_extension("zip.acmi");
+    let acmi_path = params.out_dir.join(&filename).with_extension("zip.acmi");
     tokio::fs::write(&acmi_path, &data).await?;
     let track = datums.finish();
-    let chart_path = crate::draw::draw_chart(out_dir, &filename, &track)?;
+    let chart_path = crate::draw::draw_chart(params.out_dir, &filename, &track)?;
 
-    if let Some(discord_webhook) = discord_webhook.as_deref() {
+    if let Some(discord_webhook) = params.discord_webhook.as_deref() {
         let discord_webhook = discord_webhook
             .strip_prefix("https://discord.com/api/webhooks/")
             .unwrap_or(discord_webhook);
@@ -278,16 +277,25 @@ pub async fn record_recovery(
         let webhook = http.get_webhook_with_token(id, token).await?;
 
         let embed = Embed::fake(|e| {
-            let e = e.title(format!("Pilot: {}", pilot_name)).field(
-                "Cable",
-                track
-                    .grading
-                    .cable
-                    .map(|c| c.to_string())
-                    .as_deref()
-                    .unwrap_or("-"),
-                true,
-            );
+            let e = e
+                .title(format!(
+                    "Pilot: {}",
+                    params
+                        .users
+                        .get(params.pilot_name)
+                        .map(|id| Cow::Owned(Mention::from(UserId(*id)).to_string()))
+                        .unwrap_or(Cow::Borrowed(params.pilot_name))
+                ))
+                .field(
+                    "Cable",
+                    track
+                        .grading
+                        .cable
+                        .map(|c| c.to_string())
+                        .as_deref()
+                        .unwrap_or("-"),
+                    true,
+                );
             if let Some(dcs_grading) = track.dcs_grading {
                 e.field("DCS LSO", dcs_grading, true)
             } else {

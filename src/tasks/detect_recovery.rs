@@ -1,50 +1,37 @@
-use std::path::Path;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use tonic::transport::Channel;
 use tonic::Code;
 
 use crate::client::UnitClient;
 use crate::transform::Transform;
-use crate::utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle};
+use crate::utils::{m_to_ft, m_to_nm};
 
-#[tracing::instrument(skip(out_dir, ch, pilot_name, shutdown))]
-pub async fn detect_recovery(
-    out_dir: &Path,
-    discord_webhook: Option<String>,
-    ch: Channel,
-    carrier_name: &str,
-    plane_name: &str,
-    pilot_name: &str,
-    shutdown: ShutdownHandle,
-) -> Result<(), crate::error::Error> {
+use super::TaskParams;
+
+#[tracing::instrument(
+    skip_all,
+    fields(carrier_name = params.carrier_name, plane_name = params.plane_name)
+)]
+pub async fn detect_recovery(params: TaskParams<'_>) -> Result<(), crate::error::Error> {
     tracing::debug!("started observing for possible recovery attempts");
 
-    let mut client1 = UnitClient::new(ch.clone());
-    let mut client2 = UnitClient::new(ch.clone());
-    let mut interval = crate::utils::interval::interval(Duration::from_secs(2), shutdown.clone());
+    let mut client1 = UnitClient::new(params.ch.clone());
+    let mut client2 = UnitClient::new(params.ch.clone());
+    let mut interval =
+        crate::utils::interval::interval(Duration::from_secs(2), params.shutdown.clone());
 
     while interval.next().await.is_some() {
         let result = futures_util::future::try_join(
-            client1.get_transform(carrier_name),
-            client2.get_transform(plane_name),
+            client1.get_transform(params.carrier_name),
+            client2.get_transform(params.plane_name),
         )
         .await;
 
         match result {
             Ok((carrier, plane)) => {
                 if is_recovery_attempt(&carrier, &plane) {
-                    super::record_recovery::record_recovery(
-                        out_dir,
-                        discord_webhook.clone(),
-                        ch.clone(),
-                        carrier_name,
-                        plane_name,
-                        pilot_name,
-                        shutdown.clone(),
-                    )
-                    .await?;
+                    super::record_recovery::record_recovery(params.clone()).await?;
                 }
             }
             Err(status) if status.code() == Code::NotFound => {
