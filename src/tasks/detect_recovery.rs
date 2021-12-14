@@ -69,7 +69,7 @@ pub fn is_recovery_attempt(carrier: &Transform, plane: &Transform) -> bool {
         return false;
     }
 
-    let mut ray_from_plane_to_carrier = carrier.position - plane.position;
+    let ray_from_plane_to_carrier = carrier.position - plane.position;
     let distance = ray_from_plane_to_carrier.mag();
 
     // ignore planes farther away than 1.5nm
@@ -87,10 +87,21 @@ pub fn is_recovery_attempt(carrier: &Transform, plane: &Transform) -> bool {
         return false;
     }
 
-    ray_from_plane_to_carrier.normalize();
+    // is the plane behind the carrier
+    let dot = carrier
+        .forward
+        .normalized()
+        .dot(ray_from_plane_to_carrier.normalized());
+    if dot < 0.0 {
+        tracing::trace!(dot, "ignore not behind the carrier");
+        return false;
+    }
 
     // Does the nose of the plane roughly point towards the carrier?
-    let dot = plane.velocity.normalized().dot(ray_from_plane_to_carrier);
+    let dot = plane
+        .velocity
+        .normalized()
+        .dot(ray_from_plane_to_carrier.normalized());
     if dot < 0.65 {
         tracing::trace!(dot, "ignore not roughly pointing towards the carrier");
         return false;
