@@ -91,7 +91,7 @@ impl Track {
         });
 
         // Detect touchdown based on whether the hook's end touches the deck.
-        if self.grading.is_none() && alt <= 0.1 {
+        if self.grading.is_none() && alt <= 0.09 {
             self.grading = Some(Grading {
                 cable: get_cable(carrier, plane),
             });
