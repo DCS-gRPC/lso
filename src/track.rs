@@ -18,6 +18,7 @@ pub struct Track {
     previous_distance: f64,
     datums: Vec<Datum>,
     grading: Option<Grading>,
+    dcs_grading: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -28,6 +29,7 @@ pub struct Grading {
 pub struct TrackResult {
     pub pilot_name: String,
     pub grading: Grading,
+    pub dcs_grading: Option<String>,
     pub datums: Vec<Datum>,
 }
 
@@ -38,6 +40,7 @@ impl Track {
             previous_distance: f64::MAX,
             datums: Default::default(),
             grading: None,
+            dcs_grading: None,
         }
     }
 
@@ -106,8 +109,14 @@ impl Track {
         TrackResult {
             pilot_name: self.pilot_name,
             grading: self.grading.unwrap_or_default(),
+            dcs_grading: self.dcs_grading,
             datums: self.datums,
         }
+    }
+
+    /// Set the track's dcs grading.
+    pub fn set_dcs_grading(&mut self, dcs_grading: String) {
+        self.dcs_grading = Some(dcs_grading);
     }
 }
 

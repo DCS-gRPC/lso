@@ -169,6 +169,7 @@ pub async fn record_recovery(
                     comment,
                 }) if unit.name == plane_name => {
                     tracing::info!(%comment, "landing quality mark event");
+                    datums.set_dcs_grading(comment.clone());
                     recording.write(record::Event {
                         kind: record::EventKind::Landed,
                         params: vec!["2".to_string()],
@@ -228,7 +229,7 @@ pub async fn record_recovery(
         let webhook = http.get_webhook_with_token(id, token).await?;
 
         let embed = Embed::fake(|e| {
-            e.title(format!("Pilot: {}", pilot_name)).field(
+            let e = e.title(format!("Pilot: {}", pilot_name)).field(
                 "Cable",
                 track
                     .grading
@@ -237,7 +238,12 @@ pub async fn record_recovery(
                     .as_deref()
                     .unwrap_or("-"),
                 true,
-            )
+            );
+            if let Some(dcs_grading) = track.dcs_grading {
+                e.field("DCS LSO", dcs_grading, true)
+            } else {
+                e
+            }
         });
 
         webhook
