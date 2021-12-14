@@ -12,6 +12,7 @@ use crate::utils::{m_to_ft, m_to_nm, shutdown::ShutdownHandle};
 #[tracing::instrument(skip(out_dir, ch, pilot_name, shutdown))]
 pub async fn detect_recovery(
     out_dir: &Path,
+    discord_webhook: Option<String>,
     ch: Channel,
     carrier_name: &str,
     plane_name: &str,
@@ -49,6 +50,7 @@ pub async fn detect_recovery(
 
     super::record_recovery::record_recovery(
         out_dir,
+        discord_webhook,
         ch,
         carrier_name,
         plane_name,

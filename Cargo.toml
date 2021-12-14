@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 backoff = { version = "0.3", features = ["tokio"] }
-clap = "3.0.0-beta.5"
+clap = { version = "3.0.0-rc.4", features = ["derive", "env"] }
 dotenv = "0.15"
 futures-util = "0.3"
 image = "0.23"
@@ -15,6 +15,7 @@ plotters = "0.3"
 plotters-bitmap = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
+serenity = "0.10"
 stubs = { package = "dcs-grpc-stubs", path = "../DCS-gRPC/rust-server/stubs", features = ["client"] }
 tacview = { version = "0.1" } # path = "../tacview" }
 thiserror = "1.0"
@@ -22,7 +23,6 @@ time = { version = "0.3", features = ["local-offset", "formatting", "parsing"] }
 tokio =  { version = "1.2", features = ["rt-multi-thread", "macros", "signal", "fs", "sync"] }
 tonic = "0.6"
 tracing = "0.1"
-tracing-subscriber = "0.2"
-ultraviolet = { version = "0.6", features = [ "f64" ] }
+tracing-subscriber = "0.3"
+ultraviolet = { version = "0.8", features = [ "f64" ] }
 zip = "0.5"
-

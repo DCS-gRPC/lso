@@ -14,8 +14,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter, fmt};
 use utils::shutdown::Shutdown;
 
-/// This doc string acts as a help message when the user runs '--help'
-/// as do all doc strings on fields
 #[derive(clap::Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"))]
 struct Opts {

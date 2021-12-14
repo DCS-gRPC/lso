@@ -263,11 +263,8 @@ impl CarrierPlanePair {
                     .filter(|c| c.is_ascii_alphanumeric())
                     .collect::<String>()
             );
-            crate::draw::draw_chart(
-                &out_dir,
-                &filename,
-                std::mem::replace(&mut self.datums, Track::new(&self.pilot_name)).finish(),
-            )?;
+            let track = std::mem::replace(&mut self.datums, Track::new(&self.pilot_name)).finish();
+            crate::draw::draw_chart(&out_dir, &filename, &track)?;
             self.is_recovery_attempt = false;
         }
 

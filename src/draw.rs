@@ -1,4 +1,5 @@
 use std::ops::{Neg, Range};
+use std::path::PathBuf;
 
 use image::imageops::FilterType;
 use image::ImageFormat;
@@ -38,8 +39,8 @@ const OVERLAP_OFFSET: u32 = 130;
 pub fn draw_chart(
     out_dir: &std::path::Path,
     filename: &str,
-    track: TrackResult,
-) -> Result<(), DrawError> {
+    track: &TrackResult,
+) -> Result<PathBuf, DrawError> {
     let side_height = ((ft_to_nm(SIDE_RANGE_Y.end - SIDE_RANGE_Y.start) * 5.0
         / (RANGE_X.end - RANGE_X.start))
         * (WIDTH as f64))
@@ -59,8 +60,8 @@ pub fn draw_chart(
     let (side, _) = root_drawing_area.split_vertically(side_height);
     let (_, top) = root_drawing_area.split_vertically(side_height - OVERLAP_OFFSET);
 
-    draw_side_view(&track, side)?;
-    draw_top_view(&track, top)?;
+    draw_side_view(track, side)?;
+    draw_top_view(track, top)?;
 
     let text_style = TextStyle::from(("sans-serif", 24).into_font()).color(&THEME_FG);
 
@@ -84,7 +85,9 @@ pub fn draw_chart(
         (16, 48),
     )?;
 
-    Ok(())
+    std::mem::drop(root_drawing_area);
+
+    Ok(path)
 }
 
 #[tracing::instrument(skip_all)]

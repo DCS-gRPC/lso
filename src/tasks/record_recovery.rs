@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::Path;
+use std::str::FromStr;
 use std::time::Duration;
 
 use futures_util::StreamExt;
 use once_cell::sync::Lazy;
+use serenity::http::Http;
+use serenity::model::channel::Embed;
 use stubs::common::v0::Coalition;
 use tacview::record::{Color, Coords, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
@@ -23,6 +26,7 @@ pub static FILENAME_DATETIME_FORMAT: Lazy<Vec<time::format_description::FormatIt
 #[tracing::instrument(skip(out_dir, ch, pilot_name, shutdown))]
 pub async fn record_recovery(
     out_dir: &Path,
+    discord_webhook: Option<String>,
     ch: Channel,
     carrier_name: &str,
     plane_name: &str,
@@ -141,8 +145,56 @@ pub async fn record_recovery(
 
     recording.into_inner();
     let data = acmi.into_inner();
-    tokio::fs::write(out_dir.join(&filename).with_extension("zip.acmi"), &data).await?;
-    crate::draw::draw_chart(out_dir, &filename, datums.finish())?;
+    let acmi_path = out_dir.join(&filename).with_extension("zip.acmi");
+    tokio::fs::write(&acmi_path, &data).await?;
+    let track = datums.finish();
+    let chart_path = crate::draw::draw_chart(out_dir, &filename, &track)?;
+
+    if let Some(discord_webhook) = discord_webhook.as_deref() {
+        let discord_webhook = discord_webhook
+            .strip_prefix("https://discord.com/api/webhooks/")
+            .unwrap_or(discord_webhook);
+
+        let (id, token) = match discord_webhook.split_once('/') {
+            Some((id, token)) => (id, token),
+            None => {
+                tracing::error!("received invalid Discord webhook URL");
+                return Ok(());
+            }
+        };
+
+        let id = match u64::from_str(id) {
+            Ok(id) => id,
+            Err(_) => {
+                tracing::error!("received invalid Discord webhook URL");
+                return Ok(());
+            }
+        };
+
+        let http = Http::default();
+        let webhook = http.get_webhook_with_token(id, token).await?;
+
+        let embed = Embed::fake(|e| {
+            e.title(format!("Pilot: {}", pilot_name)).field(
+                "Cable",
+                track
+                    .grading
+                    .cable
+                    .map(|c| c.to_string())
+                    .as_deref()
+                    .unwrap_or("-"),
+                true,
+            )
+        });
+
+        webhook
+            .execute(&http, false, |w| {
+                w.embeds(vec![embed])
+                    .add_file(&chart_path)
+                    .add_file(&acmi_path)
+            })
+            .await?;
+    }
 
     Ok(())
 }

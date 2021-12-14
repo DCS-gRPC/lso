@@ -16,14 +16,19 @@ use tokio::sync::mpsc;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Status;
 
-/// A subcommand for controlling testing
 #[derive(clap::Parser)]
 pub struct Opts {
-    #[clap(short = 'o', long)]
-    out_dir: Option<PathBuf>,
+    #[clap(short = 'o', long, default_value = ".")]
+    out_dir: PathBuf,
+    #[clap(long, env)]
+    discord_webhook: Option<String>,
 }
 
 pub async fn execute(opts: Opts, shutdown_handle: ShutdownHandle) {
+    if opts.discord_webhook.is_some() {
+        tracing::info!("Discord integration enabled.");
+    }
+
     let addr = "http://127.0.0.1:50051"; // TODO: move to config
     tracing::info!(endpoint = addr, "Connecting to gRPC server");
 
@@ -59,12 +64,12 @@ pub async fn execute(opts: Opts, shutdown_handle: ShutdownHandle) {
     .await;
 }
 
-async fn run(
-    opts: &Opts,
+async fn run<'a>(
+    opts: &'a Opts,
     addr: &'static str,
     shutdown_handle: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
-    let out_dir = opts.out_dir.clone().unwrap_or_default();
+    let out_dir = opts.out_dir.clone();
     let channel = Endpoint::from_static(addr)
         .keep_alive_while_idle(true)
         .connect()
@@ -127,16 +132,19 @@ async fn run(
 
     let (tx, mut rx) = mpsc::channel(1);
 
+    let discord_webhook = opts.discord_webhook.clone();
     let tx2 = tx.clone();
     let spawn_detect_recovery =
         move |carrier_name: String, plane_name: String, pilot_name: String| {
             let out_dir = out_dir.clone();
+            let discord_webhook = discord_webhook.clone();
             let channel = channel.clone();
             let tx = tx2.clone();
             let shutdown_handle = shutdown_handle.clone();
             tokio::spawn(async move {
                 if let Err(err) = crate::tasks::detect_recovery::detect_recovery(
                     &out_dir,
+                    discord_webhook,
                     channel,
                     &carrier_name,
                     &plane_name,

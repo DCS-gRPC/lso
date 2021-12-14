@@ -12,4 +12,6 @@ pub enum Error {
     Draw(#[from] crate::draw::DrawError),
     #[error("failed to parse ACMI (Tacview) file")]
     Tracview(#[from] tacview::ParseError),
+    #[error("failed to send Discord message")]
+    Discord(#[from] serenity::prelude::SerenityError),
 }
