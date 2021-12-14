@@ -4,12 +4,15 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+use futures_util::future::Either;
+use futures_util::stream::select;
 use futures_util::StreamExt;
 use once_cell::sync::Lazy;
 use serenity::http::Http;
 use serenity::model::channel::Embed;
-use stubs::common::v0::Coalition;
-use tacview::record::{Color, Coords, GlobalProperty, Property, Record, Tag, Update};
+use stubs::common::v0::{initiator, Coalition, Initiator};
+use stubs::mission::v0::stream_events_response::{Event, LandEvent, LandingQualityMarkEvent};
+use tacview::record::{self, Color, Coords, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use tonic::{transport::Channel, Status};
@@ -50,7 +53,7 @@ pub async fn record_recovery(
     let mut client2 = UnitClient::new(ch.clone());
     let mut mission = MissionClient::new(ch.clone());
     let mut hook = HookClient::new(ch.clone());
-    let mut interval = crate::utils::interval::interval(Duration::from_millis(100), shutdown);
+    let interval = crate::utils::interval::interval(Duration::from_millis(100), shutdown);
 
     let mut acmi = Cursor::new(Vec::new());
     let mut recording = tacview::Writer::new_compressed(&mut acmi)?;
@@ -78,76 +81,118 @@ pub async fn record_recovery(
     recording.write(create_initial_update(&mut client1, 1, carrier_name).await?)?;
     recording.write(create_initial_update(&mut client1, 2, plane_name).await?)?;
 
+    let events = mission.stream_events().await?;
+
     let mut known_carrier_coords = None;
     let mut known_plane_coords = None;
     let mut track_stopped = None;
 
-    while interval.next().await.is_some() {
-        let (carrier, plane) = futures_util::future::try_join(
-            client1.get_transform(carrier_name),
-            client2.get_transform(plane_name),
-        )
-        .await?;
+    let mut stream = select(interval.map(Either::Left), events.map(Either::Right));
 
-        if !ref_written {
-            lat_ref = carrier.lat;
-            lon_ref = carrier.lon;
-            recording.write(GlobalProperty::ReferenceLatitude(lat_ref))?;
-            recording.write(GlobalProperty::ReferenceLongitude(lon_ref))?;
-            ref_written = true;
-        }
+    while let Some(next) = stream.next().await {
+        match next {
+            // next interval
+            Either::Left(_) => {
+                let (carrier, plane) = futures_util::future::try_join(
+                    client1.get_transform(carrier_name),
+                    client2.get_transform(plane_name),
+                )
+                .await?;
 
-        let carrier_update = Update {
-            id: 1,
-            props: vec![Property::T(remove_unchanged(
-                Coords::default()
-                    .position(carrier.lat - lat_ref, carrier.lon - lon_ref, carrier.alt)
-                    .uv(carrier.position.x, carrier.position.z)
-                    .orientation(carrier.yaw, carrier.pitch, carrier.roll)
-                    .heading(carrier.heading),
-                &mut known_carrier_coords,
-            ))],
-        };
-        let plane_update = Update {
-            id: 2,
-            props: vec![
-                Property::T(remove_unchanged(
-                    Coords::default()
-                        .position(plane.lat - lat_ref, plane.lon - lon_ref, plane.alt)
-                        .uv(plane.position.x, plane.position.z)
-                        .orientation(plane.yaw, plane.pitch, plane.roll)
-                        .heading(plane.heading),
-                    &mut known_plane_coords,
-                )),
-                Property::AOA(plane.aoa),
-            ],
-        };
+                if !ref_written {
+                    lat_ref = carrier.lat;
+                    lon_ref = carrier.lon;
+                    recording.write(GlobalProperty::ReferenceLatitude(lat_ref))?;
+                    recording.write(GlobalProperty::ReferenceLongitude(lon_ref))?;
+                    ref_written = true;
+                }
 
-        if (carrier.time - plane.time).abs() < 0.01 {
-            recording.write(Record::Frame(carrier.time))?;
-            recording.write(carrier_update)?;
-            recording.write(plane_update)?;
-        } else if carrier.time < plane.time {
-            recording.write(Record::Frame(carrier.time))?;
-            recording.write(carrier_update)?;
-            recording.write(Record::Frame(plane.time))?;
-            recording.write(plane_update)?;
-        } else {
-            recording.write(Record::Frame(plane.time))?;
-            recording.write(plane_update)?;
-            recording.write(Record::Frame(carrier.time))?;
-            recording.write(carrier_update)?;
-        }
+                let carrier_update = Update {
+                    id: 1,
+                    props: vec![Property::T(remove_unchanged(
+                        Coords::default()
+                            .position(carrier.lat - lat_ref, carrier.lon - lon_ref, carrier.alt)
+                            .uv(carrier.position.x, carrier.position.z)
+                            .orientation(carrier.yaw, carrier.pitch, carrier.roll)
+                            .heading(carrier.heading),
+                        &mut known_carrier_coords,
+                    ))],
+                };
+                let plane_update = Update {
+                    id: 2,
+                    props: vec![
+                        Property::T(remove_unchanged(
+                            Coords::default()
+                                .position(plane.lat - lat_ref, plane.lon - lon_ref, plane.alt)
+                                .uv(plane.position.x, plane.position.z)
+                                .orientation(plane.yaw, plane.pitch, plane.roll)
+                                .heading(plane.heading),
+                            &mut known_plane_coords,
+                        )),
+                        Property::AOA(plane.aoa),
+                    ],
+                };
 
-        if track_stopped.is_none() && !datums.next(&carrier, &plane) {
-            // don't stop right away, track a couple of more seconds
-            track_stopped = Some(Instant::now());
-        }
+                if (carrier.time - plane.time).abs() < 0.01 {
+                    recording.write(Record::Frame(carrier.time))?;
+                    recording.write(carrier_update)?;
+                    recording.write(plane_update)?;
+                } else if carrier.time < plane.time {
+                    recording.write(Record::Frame(carrier.time))?;
+                    recording.write(carrier_update)?;
+                    recording.write(Record::Frame(plane.time))?;
+                    recording.write(plane_update)?;
+                } else {
+                    recording.write(Record::Frame(plane.time))?;
+                    recording.write(plane_update)?;
+                    recording.write(Record::Frame(carrier.time))?;
+                    recording.write(carrier_update)?;
+                }
 
-        if let Some(track_stopped) = track_stopped {
-            if track_stopped.elapsed() > Duration::from_secs(10) {
-                break;
+                if track_stopped.is_none() && !datums.next(&carrier, &plane) {
+                    // don't stop right away, track a couple of more seconds
+                    track_stopped = Some(Instant::now());
+                }
+
+                if let Some(track_stopped) = track_stopped {
+                    if track_stopped.elapsed() > Duration::from_secs(10) {
+                        break;
+                    }
+                }
             }
+            Either::Right(event) => match event? {
+                Event::LandingQualityMark(LandingQualityMarkEvent {
+                    initiator:
+                        Some(Initiator {
+                            initiator: Some(initiator::Initiator::Unit(unit)),
+                        }),
+                    comment,
+                }) if unit.name == plane_name => {
+                    tracing::info!(%comment, "landing quality mark event");
+                    recording.write(record::Event {
+                        kind: record::EventKind::Landed,
+                        params: vec!["2".to_string()],
+                        text: Some(comment),
+                    })?;
+                }
+
+                Event::Land(LandEvent {
+                    initiator:
+                        Some(Initiator {
+                            initiator: Some(initiator::Initiator::Unit(unit)),
+                        }),
+                    place: Some(carrier),
+                }) if unit.name == plane_name && carrier.name == carrier_name => {
+                    tracing::info!("land event");
+                    recording.write(record::Event {
+                        kind: record::EventKind::Landed,
+                        params: vec!["2".to_string()],
+                        text: None,
+                    })?;
+                }
+
+                _ => {}
+            },
         }
     }
 
