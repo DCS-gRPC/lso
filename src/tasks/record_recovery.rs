@@ -50,7 +50,7 @@ pub async fn record_recovery(
     let mut client2 = UnitClient::new(ch.clone());
     let mut mission = MissionClient::new(ch.clone());
     let mut hook = HookClient::new(ch.clone());
-    let mut interval = crate::utils::interval::interval(Duration::from_millis(150), shutdown);
+    let mut interval = crate::utils::interval::interval(Duration::from_millis(100), shutdown);
 
     let mut acmi = Cursor::new(Vec::new());
     let mut recording = tacview::Writer::new_compressed(&mut acmi)?;
