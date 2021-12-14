@@ -173,24 +173,36 @@ async fn run<'a>(
     tokio::spawn(async move {
         while let Some(event) = events.next().await {
             let event = match event {
-                Ok(event) => event,
+                Ok(stubs::mission::v0::StreamEventsResponse {
+                    event: Some(event), ..
+                }) => event,
+                Ok(_) => continue,
                 Err(err) => {
                     tx.send(err.into()).await.ok();
                     return;
                 }
             };
 
-            if let stubs::mission::v0::StreamEventsResponse {
-                event:
-                    Some(Event::Birth(mission::v0::stream_events_response::BirthEvent {
-                        initiator:
-                            Some(common::v0::Initiator {
-                                initiator: Some(common::v0::initiator::Initiator::Unit(unit)),
-                            }),
-                        ..
-                    })),
+            if let Event::LandingQualityMark(
+                mission::v0::stream_events_response::LandingQualityMarkEvent {
+                    initiator:
+                        Some(common::v0::Initiator {
+                            initiator: Some(common::v0::initiator::Initiator::Unit(unit)),
+                        }),
+                    comment,
+                },
+            ) = &event
+            {
+                tracing::info!(unit = %unit.name, %comment, "LandingQualityMarkEvent");
+            }
+
+            if let Event::Birth(mission::v0::stream_events_response::BirthEvent {
+                initiator:
+                    Some(common::v0::Initiator {
+                        initiator: Some(common::v0::initiator::Initiator::Unit(unit)),
+                    }),
                 ..
-            } = event
+            }) = event
             {
                 match check_candidate(&mut unit_svc, &unit).await {
                     Ok(Some(Candidate::Plane)) => {
