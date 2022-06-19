@@ -63,7 +63,7 @@ pub async fn execute(
             || async {
                 run(&opts, addr, users.clone(), shutdown_handle.clone())
                     .await
-                    .map_err(backoff::Error::Transient)
+                    .map_err(backoff::Error::transient)
             },
             // error hook:
             |err, backoff: Duration| {
@@ -102,7 +102,7 @@ async fn run<'a>(
     let groups = coalition_svc
         .get_groups(coalition::v0::GetGroupsRequest {
             coalition: Coalition::All.into(),
-            category: None,
+            category: 0,
         })
         .map_ok(|res| res.into_inner().groups)
         .await?;

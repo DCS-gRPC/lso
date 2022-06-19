@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::io::Cursor;
-use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use futures_util::future::Either;
@@ -11,7 +10,7 @@ use once_cell::sync::Lazy;
 use serenity::http::Http;
 use serenity::model::channel::Embed;
 use serenity::model::id::UserId;
-use serenity::model::misc::Mention;
+use serenity::model::mention::Mention;
 use stubs::common::v0::{initiator, Coalition, Initiator};
 use stubs::mission::v0::stream_events_response::{Event, LandEvent, LandingQualityMarkEvent};
 use tacview::record::{self, Color, Coords, GlobalProperty, Property, Record, Tag, Update};
@@ -253,39 +252,20 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
     let chart_path = crate::draw::draw_chart(params.out_dir, &filename, &track)?;
 
     if let Some(discord_webhook) = params.discord_webhook.as_deref() {
-        let discord_webhook = discord_webhook
-            .strip_prefix("https://discord.com/api/webhooks/")
-            .unwrap_or(discord_webhook);
-
-        let (id, token) = match discord_webhook.split_once('/') {
-            Some((id, token)) => (id, token),
-            None => {
-                tracing::error!("received invalid Discord webhook URL");
-                return Ok(());
-            }
-        };
-
-        let id = match u64::from_str(id) {
-            Ok(id) => id,
-            Err(_) => {
-                tracing::error!("received invalid Discord webhook URL");
-                return Ok(());
-            }
-        };
-
-        let http = Http::default();
-        let webhook = http.get_webhook_with_token(id, token).await?;
+        let http = Http::new("token");
+        let webhook = http.get_webhook_from_url(discord_webhook).await?;
 
         let embed = Embed::fake(|e| {
             let e = e
-                .title(format!(
-                    "Pilot: {}",
+                .field(
+                    "Pilot",
                     params
                         .users
                         .get(params.pilot_name)
                         .map(|id| Cow::Owned(Mention::from(UserId(*id)).to_string()))
-                        .unwrap_or(Cow::Borrowed(params.pilot_name))
-                ))
+                        .unwrap_or(Cow::Borrowed(params.pilot_name)),
+                    true,
+                )
                 .field(
                     "Cable",
                     track
