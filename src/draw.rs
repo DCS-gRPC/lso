@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::ops::{Neg, Range};
 use std::path::PathBuf;
 
@@ -13,7 +14,7 @@ use plotters_bitmap::bitmap_pixel::RGBPixel;
 use plotters_bitmap::BitMapBackend;
 
 use crate::data;
-use crate::track::{Datum, TrackResult};
+use crate::track::{Datum, Grading, TrackResult};
 use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft, nm_to_m};
 
 const THEME_BG: RGBColor = RGBColor(31, 41, 55); // 1F2937
@@ -73,13 +74,14 @@ pub fn draw_chart(
 
     root_drawing_area.draw_text(
         &format!(
-            "Cable: {}",
-            track
-                .grading
-                .cable
-                .map(|c| c.to_string())
-                .as_deref()
-                .unwrap_or("-")
+            "Grading: {}",
+            match track.grading {
+                Grading::Unknown => Cow::Borrowed("unknown"),
+                Grading::Bolter => Cow::Borrowed("Bolter"),
+                Grading::Recovered { cable } => cable
+                    .map(|c| Cow::Owned(format!("#{}", c)))
+                    .unwrap_or(Cow::Borrowed("-")),
+            }
         ),
         &text_style,
         (16, 48),

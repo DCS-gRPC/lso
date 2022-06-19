@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::ops::Neg;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Instant;
 
 use crate::draw::DrawError;
@@ -9,7 +10,7 @@ use crate::tasks::detect_recovery::is_recovery_attempt;
 use crate::tasks::record_recovery::FILENAME_DATETIME_FORMAT;
 use crate::track::Track;
 use crate::transform::Transform;
-use tacview::record::{GlobalProperty, Property, Record, Tag, Update};
+use tacview::record::{Event, EventKind, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime, UtcOffset};
 use ultraviolet::{DRotor3, DVec3};
@@ -106,6 +107,24 @@ pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
                 }
             }
 
+            Record::Event(Event {
+                kind: EventKind::Landed,
+                mut params,
+                ..
+            }) => {
+                tracing::trace!(?params, "landed event");
+                if let Some((carrier_id, plane_id)) = params
+                    .pop()
+                    .and_then(|id| u64::from_str(&id).ok())
+                    .zip(params.pop().and_then(|id| u64::from_str(&id).ok()))
+                {
+                    tracing::trace!(carrier_id, plane_id, "landed event");
+                    for track in &mut tracks {
+                        track.landed(carrier_id, plane_id);
+                    }
+                }
+            }
+
             _ => {}
         }
     }
@@ -130,6 +149,7 @@ struct CarrierPlanePair {
     is_recovery_attempt: bool,
     is_dirty: bool,
     datums: Track,
+    landed: bool,
 }
 
 impl CarrierPlanePair {
@@ -149,6 +169,7 @@ impl CarrierPlanePair {
             is_recovery_attempt: false,
             is_dirty: false,
             datums: Track::new(pilot_name),
+            landed: false,
         }
     }
 
@@ -228,6 +249,13 @@ impl CarrierPlanePair {
         }
     }
 
+    fn landed(&mut self, carrier_id: u64, plane_id: u64) {
+        if self.carrier_id == carrier_id && self.plane_id == plane_id && !self.landed {
+            self.landed = true;
+            self.is_dirty = true;
+        }
+    }
+
     fn process_frame(&mut self) -> Result<(), DrawError> {
         if !self.is_dirty {
             return Ok(());
@@ -240,7 +268,12 @@ impl CarrierPlanePair {
         }
 
         if self.is_recovery_attempt {
-            if !self.datums.next(&self.carrier, &self.plane) {
+            let mut should_continue = self.datums.next(&self.carrier, &self.plane);
+            if self.landed {
+                self.datums.landed(&self.carrier, &self.plane);
+                should_continue = false;
+            }
+            if !should_continue {
                 self.draw()?;
             }
         } else if is_recovery_attempt(&self.carrier, &self.plane) {
@@ -266,6 +299,7 @@ impl CarrierPlanePair {
             let track = std::mem::replace(&mut self.datums, Track::new(&self.pilot_name)).finish();
             crate::draw::draw_chart(&out_dir, &filename, &track)?;
             self.is_recovery_attempt = false;
+            self.landed = false;
         }
 
         Ok(())

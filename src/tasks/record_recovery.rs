@@ -19,7 +19,7 @@ use time::OffsetDateTime;
 use tonic::Status;
 
 use crate::client::{HookClient, MissionClient, UnitClient};
-use crate::track::Track;
+use crate::track::{Grading, Track};
 use crate::transform::Transform;
 
 use super::TaskParams;
@@ -84,7 +84,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
 
     let mut known_carrier_coords = None;
     let mut known_plane_coords = None;
-    let mut track_stopped = None;
+    let mut track_stopped: Option<Instant> = None;
 
     let mut stream = select(interval.map(Either::Left), events.map(Either::Right));
 
@@ -148,9 +148,8 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     recording.write(carrier_update)?;
                 }
 
-                if track_stopped.is_none() && !datums.next(&carrier, &plane) {
-                    // don't stop right away, track a couple of more seconds
-                    track_stopped = Some(Instant::now());
+                if !datums.next(&carrier, &plane) {
+                    break;
                 }
 
                 if let Some(track_stopped) = track_stopped {
@@ -159,6 +158,8 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     }
                 }
             }
+
+            // next event
             Either::Right(event) => match event? {
                 (
                     time,
@@ -209,7 +210,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     })?;
 
                     recording.write(record::Event {
-                        kind: record::EventKind::Landed,
+                        kind: record::EventKind::Message,
                         params: vec!["2".to_string()],
                         text: Some(comment),
                     })?;
@@ -263,9 +264,15 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
 
                     recording.write(record::Event {
                         kind: record::EventKind::Landed,
-                        params: vec!["2".to_string()],
+                        params: vec!["2".to_string(), "1".to_string()],
                         text: None,
                     })?;
+
+                    datums.next(&carrier, &plane);
+                    datums.landed(&carrier, &plane);
+
+                    // don't stop right away, track a couple of more seconds
+                    track_stopped = Some(Instant::now());
                 }
 
                 _ => {}
@@ -296,13 +303,14 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     true,
                 )
                 .field(
-                    "Cable",
-                    track
-                        .grading
-                        .cable
-                        .map(|c| c.to_string())
-                        .as_deref()
-                        .unwrap_or("-"),
+                    "Grading",
+                    match track.grading {
+                        Grading::Unknown => Cow::Borrowed("unknown"),
+                        Grading::Bolter => Cow::Borrowed("Bolter"),
+                        Grading::Recovered { cable } => cable
+                            .map(|c| Cow::Owned(format!("#{}", c)))
+                            .unwrap_or(Cow::Borrowed("-")),
+                    },
                     true,
                 );
             if let Some(dcs_grading) = track.dcs_grading {

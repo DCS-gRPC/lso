@@ -2049,9 +2049,9 @@ checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
 
 [[package]]
 name = "tacview"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe619be455ef0aefc0ff21af6d8cf60c102440ba667d4580d927067342898a8"
+checksum = "ffd23994d1ff275bd2c1c05749f76de53dfd06d0bd59a786f27ad3da7beab812"
 dependencies = [
  "thiserror",
  "zip 0.5.13",

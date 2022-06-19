@@ -21,9 +21,11 @@ pub struct Track {
     dcs_grading: Option<String>,
 }
 
-#[derive(Debug, Default)]
-pub struct Grading {
-    pub cable: Option<u8>,
+#[derive(Debug)]
+pub enum Grading {
+    Unknown,
+    Bolter,
+    Recovered { cable: Option<u8> },
 }
 
 pub struct TrackResult {
@@ -58,13 +60,25 @@ impl Track {
         );
 
         // Stop tracking once the distance from the plane to the landing position is increasing and
-        // has increased more than 20m (since the last time the distance was decreasing).
+        // has increased more than 100m (since the last time the distance was decreasing).
         let distance = ray_from_plane_to_carrier.mag();
         if distance < self.previous_distance {
             self.previous_distance = distance;
-        } else if distance - self.previous_distance > 20.0 {
+        } else if distance - self.previous_distance > 100.0 {
+            if self.grading.is_some() {
+                tracing::debug!(distance_in_m = distance, "bolter detected");
+                self.grading = Some(Grading::Bolter);
+            }
+
             tracing::debug!(distance_in_m = distance, "stop tracking");
+
             return false;
+        }
+
+        // Already landed, no need to actually record any more datums, but keep going to detect
+        // bolters.
+        if self.grading.is_some() {
+            return true;
         }
 
         // Construct the x axis, which is aligned to the angled deck.
@@ -93,16 +107,13 @@ impl Track {
             alt: alt.max(0.0),
         });
 
-        // Detect touchdown based on whether the hook's end touches the deck.
-        if self.grading.is_none() && alt <= 0.09 {
-            self.grading = Some(Grading {
-                cable: get_cable(carrier, plane),
-            });
-            tracing::debug!(distance_in_m = distance, alt, "stop tracking");
-            return false;
-        }
-
         true
+    }
+
+    pub fn landed(&mut self, carrier: &Transform, plane: &Transform) {
+        let cable = get_cable(carrier, plane);
+        self.grading = Some(Grading::Recovered { cable });
+        tracing::debug!(?cable, "landed, stop tracking");
     }
 
     pub fn finish(self) -> TrackResult {
@@ -158,4 +169,10 @@ fn get_cable(carrier: &Transform, plane: &Transform) -> Option<u8> {
     }
 
     None
+}
+
+impl Default for Grading {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
