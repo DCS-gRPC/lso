@@ -486,7 +486,6 @@ dependencies = [
 [[package]]
 name = "dcs-grpc-stubs"
 version = "0.1.0"
-source = "git+https://github.com/DCS-gRPC/rust-server.git?rev=0.6.0#eeb4b8a26dbd18aafa853e216e775647a388019f"
 dependencies = [
  "prost",
  "prost-types",

@@ -11,7 +11,7 @@ use serenity::http::Http;
 use serenity::model::channel::Embed;
 use serenity::model::id::UserId;
 use serenity::model::mention::Mention;
-use stubs::common::v0::{initiator, Coalition, Initiator};
+use stubs::common::v0::{initiator, Airbase, Coalition, Initiator};
 use stubs::mission::v0::stream_events_response::{Event, LandEvent, LandingQualityMarkEvent};
 use tacview::record::{self, Color, Coords, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
@@ -20,6 +20,7 @@ use tonic::Status;
 
 use crate::client::{HookClient, MissionClient, UnitClient};
 use crate::track::Track;
+use crate::transform::Transform;
 
 use super::TaskParams;
 
@@ -166,33 +167,47 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                             Some(Initiator {
                                 initiator: Some(initiator::Initiator::Unit(plane)),
                             }),
-                        place: Some(carrier),
+                        place:
+                            Some(Airbase {
+                                unit: Some(carrier),
+                                ..
+                            }),
                         comment,
                     }),
                 ) if plane.name == params.plane_name && carrier.name == params.carrier_name => {
                     tracing::info!(%comment, "landing quality mark event");
                     datums.set_dcs_grading(comment.clone());
                     recording.write(Record::Frame(time))?;
-                    if let Some(pos) = carrier.position {
-                        recording.write(Update {
-                            id: 1,
-                            props: vec![Property::T(Coords::default().position(
-                                pos.lat - lat_ref,
-                                pos.lon - lon_ref,
-                                pos.alt,
-                            ))],
-                        })?;
-                    }
-                    if let Some(pos) = plane.position {
-                        recording.write(Update {
-                            id: 2,
-                            props: vec![Property::T(Coords::default().position(
-                                pos.lat - lat_ref,
-                                pos.lon - lon_ref,
-                                pos.alt,
-                            ))],
-                        })?;
-                    }
+
+                    let carrier = Transform::from((time, carrier.transform.unwrap_or_default()));
+                    recording.write(Update {
+                        id: 1,
+                        props: vec![Property::T(remove_unchanged(
+                            Coords::default()
+                                .position(carrier.lat - lat_ref, carrier.lon - lon_ref, carrier.alt)
+                                .uv(carrier.position.x, carrier.position.z)
+                                .orientation(carrier.yaw, carrier.pitch, carrier.roll)
+                                .heading(carrier.heading),
+                            &mut known_carrier_coords,
+                        ))],
+                    })?;
+
+                    let plane = Transform::from((time, plane.transform.unwrap_or_default()));
+                    recording.write(Update {
+                        id: 2,
+                        props: vec![
+                            Property::T(remove_unchanged(
+                                Coords::default()
+                                    .position(plane.lat - lat_ref, plane.lon - lon_ref, plane.alt)
+                                    .uv(plane.position.x, plane.position.z)
+                                    .orientation(plane.yaw, plane.pitch, plane.roll)
+                                    .heading(plane.heading),
+                                &mut known_plane_coords,
+                            )),
+                            Property::AOA(plane.aoa),
+                        ],
+                    })?;
+
                     recording.write(record::Event {
                         kind: record::EventKind::Landed,
                         params: vec!["2".to_string()],
@@ -207,31 +222,45 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                             Some(Initiator {
                                 initiator: Some(initiator::Initiator::Unit(plane)),
                             }),
-                        place: Some(carrier),
+                        place:
+                            Some(Airbase {
+                                unit: Some(carrier),
+                                ..
+                            }),
                     }),
                 ) if plane.name == params.plane_name && carrier.name == params.carrier_name => {
                     tracing::info!("land event");
                     recording.write(Record::Frame(time))?;
-                    if let Some(pos) = carrier.position {
-                        recording.write(Update {
-                            id: 1,
-                            props: vec![Property::T(Coords::default().position(
-                                pos.lat - lat_ref,
-                                pos.lon - lon_ref,
-                                pos.alt,
-                            ))],
-                        })?;
-                    }
-                    if let Some(pos) = plane.position {
-                        recording.write(Update {
-                            id: 2,
-                            props: vec![Property::T(Coords::default().position(
-                                pos.lat - lat_ref,
-                                pos.lon - lon_ref,
-                                pos.alt,
-                            ))],
-                        })?;
-                    }
+
+                    let carrier = Transform::from((time, carrier.transform.unwrap_or_default()));
+                    recording.write(Update {
+                        id: 1,
+                        props: vec![Property::T(remove_unchanged(
+                            Coords::default()
+                                .position(carrier.lat - lat_ref, carrier.lon - lon_ref, carrier.alt)
+                                .uv(carrier.position.x, carrier.position.z)
+                                .orientation(carrier.yaw, carrier.pitch, carrier.roll)
+                                .heading(carrier.heading),
+                            &mut known_carrier_coords,
+                        ))],
+                    })?;
+
+                    let plane = Transform::from((time, plane.transform.unwrap_or_default()));
+                    recording.write(Update {
+                        id: 2,
+                        props: vec![
+                            Property::T(remove_unchanged(
+                                Coords::default()
+                                    .position(plane.lat - lat_ref, plane.lon - lon_ref, plane.alt)
+                                    .uv(plane.position.x, plane.position.z)
+                                    .orientation(plane.yaw, plane.pitch, plane.roll)
+                                    .heading(plane.heading),
+                                &mut known_plane_coords,
+                            )),
+                            Property::AOA(plane.aoa),
+                        ],
+                    })?;
+
                     recording.write(record::Event {
                         kind: record::EventKind::Landed,
                         params: vec!["2".to_string()],

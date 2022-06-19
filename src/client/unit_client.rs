@@ -1,10 +1,7 @@
-use std::ops::Neg;
-
 use stubs::common::v0::Unit;
 use stubs::unit;
 use stubs::unit::v0::unit_service_client::UnitServiceClient;
 use tonic::{transport::Channel, Status};
-use ultraviolet::{DRotor3, DVec3};
 
 use crate::transform::Transform;
 
@@ -31,34 +28,8 @@ impl UnitClient {
             .await?
             .into_inner();
 
-        let position = res.position.unwrap_or_default();
-        let orientation = res.orientation.unwrap_or_default();
-        let forward = orientation.forward.unwrap_or_default();
-        let forward = DVec3::new(forward.x, forward.y, forward.z);
-
-        let velocity = res.velocity.unwrap_or_default();
-        let velocity = DVec3::new(velocity.x, velocity.y, velocity.z);
-        let aoa = forward.dot(velocity.normalized()).acos().to_degrees();
-
-        Ok(Transform {
-            forward,
-            velocity,
-            position: DVec3::new(res.u, position.alt, res.v),
-            heading: res.heading,
-            lat: position.lat,
-            lon: position.lon,
-            alt: position.alt,
-            yaw: orientation.yaw,
-            pitch: orientation.pitch,
-            roll: orientation.roll,
-            rotation: DRotor3::from_euler_angles(
-                orientation.roll.neg().to_radians(),
-                orientation.pitch.neg().to_radians(),
-                res.heading.neg().to_radians(),
-            ),
-            aoa,
-            time: res.time,
-        })
+        let transform = res.transform.unwrap_or_default();
+        Ok((res.time, transform).into())
     }
 
     pub async fn get_unit(&mut self, unit_name: &str) -> Result<Unit, Status> {
