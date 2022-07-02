@@ -180,7 +180,12 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     datums.set_dcs_grading(comment.clone());
                     recording.write(Record::Frame(time))?;
 
-                    let carrier = Transform::from((time, carrier.transform.unwrap_or_default()));
+                    let carrier = Transform::from((
+                        time,
+                        carrier.position.unwrap_or_default(),
+                        carrier.orientation.unwrap_or_default(),
+                        carrier.velocity.unwrap_or_default(),
+                    ));
                     recording.write(Update {
                         id: 1,
                         props: vec![Property::T(remove_unchanged(
@@ -193,7 +198,12 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                         ))],
                     })?;
 
-                    let plane = Transform::from((time, plane.transform.unwrap_or_default()));
+                    let plane = Transform::from((
+                        time,
+                        plane.position.unwrap_or_default(),
+                        plane.orientation.unwrap_or_default(),
+                        plane.velocity.unwrap_or_default(),
+                    ));
                     recording.write(Update {
                         id: 2,
                         props: vec![
@@ -233,7 +243,12 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     tracing::info!("land event");
                     recording.write(Record::Frame(time))?;
 
-                    let carrier = Transform::from((time, carrier.transform.unwrap_or_default()));
+                    let carrier = Transform::from((
+                        time,
+                        carrier.position.unwrap_or_default(),
+                        carrier.orientation.unwrap_or_default(),
+                        carrier.velocity.unwrap_or_default(),
+                    ));
                     recording.write(Update {
                         id: 1,
                         props: vec![Property::T(remove_unchanged(
@@ -246,7 +261,12 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                         ))],
                     })?;
 
-                    let plane = Transform::from((time, plane.transform.unwrap_or_default()));
+                    let plane = Transform::from((
+                        time,
+                        plane.position.unwrap_or_default(),
+                        plane.orientation.unwrap_or_default(),
+                        plane.velocity.unwrap_or_default(),
+                    ));
                     recording.write(Update {
                         id: 2,
                         props: vec![
@@ -344,7 +364,7 @@ async fn create_initial_update(
     let mut props = vec![
         Property::Type(tags(&attrs)),
         Property::Name(unit.r#type),
-        Property::Group(unit.group_name),
+        Property::Group(unit.group.unwrap_or_default().name),
         Property::Color(color(coalition)),
     ];
     if let Some(player_name) = &unit.player_name {

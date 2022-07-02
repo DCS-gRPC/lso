@@ -260,7 +260,7 @@ async fn check_candidate(
     svc: &mut UnitServiceClient<Channel>,
     unit: &common::v0::Unit,
 ) -> Result<Option<Candidate>, Status> {
-    match GroupCategory::from_i32(unit.category) {
+    match GroupCategory::from_i32(unit.group.as_ref().map(|g| g.category).unwrap_or(-1)) {
         // TODO: only players
         // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
         Some(GroupCategory::Airplane) => return Ok(Some(Candidate::Plane)),

@@ -28,8 +28,13 @@ impl UnitClient {
             .await?
             .into_inner();
 
-        let transform = res.transform.unwrap_or_default();
-        Ok((res.time, transform).into())
+        Ok((
+            res.time,
+            res.position.unwrap_or_default(),
+            res.orientation.unwrap_or_default(),
+            res.velocity.unwrap_or_default(),
+        )
+            .into())
     }
 
     pub async fn get_unit(&mut self, unit_name: &str) -> Result<Unit, Status> {

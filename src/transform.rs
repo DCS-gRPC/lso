@@ -1,5 +1,6 @@
 use std::ops::Neg;
 
+use stubs::common::v0::{Orientation, Position, Vector, Velocity};
 use ultraviolet::{DRotor3, DVec3};
 
 #[derive(Debug, Default)]
@@ -23,22 +24,19 @@ pub struct Transform {
     pub time: f64,
 }
 
-impl From<(f64, stubs::common::v0::Transform)> for Transform {
-    fn from((time, transform): (f64, stubs::common::v0::Transform)) -> Self {
-        let position = transform.position.unwrap_or_default();
-        let orientation = transform.orientation.unwrap_or_default();
-        let forward = orientation.forward.unwrap_or_default();
-        let forward = DVec3::new(forward.x, forward.y, forward.z);
-
-        let velocity = transform.velocity.unwrap_or_default();
-        let velocity = DVec3::new(velocity.x, velocity.y, velocity.z);
+impl From<(f64, Position, Orientation, Velocity)> for Transform {
+    fn from(
+        (time, position, orientation, velocity): (f64, Position, Orientation, Velocity),
+    ) -> Self {
+        let velocity = fix_vector(velocity.velocity.unwrap_or_default());
+        let forward = fix_vector(orientation.forward.unwrap_or_default());
         let aoa = forward.dot(velocity.normalized()).acos().to_degrees();
 
         Transform {
             forward,
             velocity,
-            position: DVec3::new(transform.u, position.alt, transform.v),
-            heading: transform.heading,
+            position: DVec3::new(position.u, position.alt, position.v),
+            heading: orientation.heading,
             lat: position.lat,
             lon: position.lon,
             alt: position.alt,
@@ -48,10 +46,16 @@ impl From<(f64, stubs::common::v0::Transform)> for Transform {
             rotation: DRotor3::from_euler_angles(
                 orientation.roll.neg().to_radians(),
                 orientation.pitch.neg().to_radians(),
-                transform.heading.neg().to_radians(),
+                orientation.heading.neg().to_radians(),
             ),
             aoa,
             time,
         }
     }
+}
+
+/// Convert DCS' unusual right-hand coordinate system where +x points north to a more common
+/// left-hand coordinate system where +z points north (and +x points east).
+fn fix_vector(v: Vector) -> DVec3 {
+    DVec3::new(v.z, v.y, v.x)
 }
