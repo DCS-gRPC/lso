@@ -152,7 +152,7 @@ async fn run<'a>(
 
     let discord_webhook = opts.discord_webhook.clone();
     let tx2 = tx.clone();
-    let spawn_detect_recovery =
+    let spawn_detect_recovery_attempt =
         move |carrier_name: String, plane_name: String, pilot_name: String| {
             let out_dir = out_dir.clone();
             let discord_webhook = discord_webhook.clone();
@@ -161,17 +161,18 @@ async fn run<'a>(
             let tx = tx2.clone();
             let shutdown_handle = shutdown_handle.clone();
             tokio::spawn(async move {
-                if let Err(err) = crate::tasks::detect_recovery::detect_recovery(TaskParams {
-                    out_dir: &out_dir,
-                    discord_webhook,
-                    users,
-                    ch: channel,
-                    carrier_name: &carrier_name,
-                    plane_name: &plane_name,
-                    pilot_name: &pilot_name,
-                    shutdown: shutdown_handle,
-                })
-                .await
+                if let Err(err) =
+                    crate::tasks::detect_recovery_attempt::detect_recovery_attempt(TaskParams {
+                        out_dir: &out_dir,
+                        discord_webhook,
+                        users,
+                        ch: channel,
+                        carrier_name: &carrier_name,
+                        plane_name: &plane_name,
+                        pilot_name: &pilot_name,
+                        shutdown: shutdown_handle,
+                    })
+                    .await
                 {
                     tx.send(err).await.ok();
                 }
@@ -180,7 +181,11 @@ async fn run<'a>(
 
     for carrier_name in &carriers {
         for (plane_name, pilot_name) in &planes {
-            spawn_detect_recovery(carrier_name.clone(), plane_name.clone(), pilot_name.clone());
+            spawn_detect_recovery_attempt(
+                carrier_name.clone(),
+                plane_name.clone(),
+                pilot_name.clone(),
+            );
         }
     }
 
@@ -214,7 +219,7 @@ async fn run<'a>(
                 match check_candidate(&mut unit_svc, &unit).await {
                     Ok(Some(Candidate::Plane)) => {
                         for carrier_name in &carriers {
-                            spawn_detect_recovery(
+                            spawn_detect_recovery_attempt(
                                 carrier_name.clone(),
                                 unit.name.clone(),
                                 unit.player_name
@@ -225,7 +230,7 @@ async fn run<'a>(
                     }
                     Ok(Some(Candidate::Carrier)) => {
                         for (plane_name, pilot_name) in &planes {
-                            spawn_detect_recovery(
+                            spawn_detect_recovery_attempt(
                                 unit.name.clone(),
                                 plane_name.clone(),
                                 pilot_name.clone(),

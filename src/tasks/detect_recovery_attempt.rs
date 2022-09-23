@@ -13,7 +13,7 @@ use super::TaskParams;
     skip_all,
     fields(carrier_name = params.carrier_name, plane_name = params.plane_name)
 )]
-pub async fn detect_recovery(params: TaskParams<'_>) -> Result<(), crate::error::Error> {
+pub async fn detect_recovery_attempt(params: TaskParams<'_>) -> Result<(), crate::error::Error> {
     tracing::debug!("started observing for possible recovery attempts");
 
     let mut client1 = UnitClient::new(params.ch.clone());

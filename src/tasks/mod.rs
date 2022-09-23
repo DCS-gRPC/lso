@@ -6,7 +6,7 @@ use tonic::transport::Channel;
 
 use crate::utils::shutdown::ShutdownHandle;
 
-pub mod detect_recovery;
+pub mod detect_recovery_attempt;
 pub mod record_recovery;
 
 #[derive(Clone)]

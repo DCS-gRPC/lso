@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::time::Instant;
 
 use crate::draw::DrawError;
-use crate::tasks::detect_recovery::is_recovery_attempt;
+use crate::tasks::detect_recovery_attempt::is_recovery_attempt;
 use crate::tasks::record_recovery::FILENAME_DATETIME_FORMAT;
 use crate::track::Track;
 use crate::transform::Transform;
