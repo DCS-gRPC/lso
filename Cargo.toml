@@ -16,8 +16,8 @@ plotters-bitmap = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 serenity = "0.11"
-stubs = { package = "dcs-grpc-stubs", path = "../DCS-gRPC/rust-server/stubs", features = ["client"] }
-# stubs = { package = "dcs-grpc-stubs", git = "https://github.com/DCS-gRPC/rust-server.git", rev = "0.6.0", features = ["client"] }
+# stubs = { package = "dcs-grpc-stubs", path = "../DCS-gRPC/rust-server/stubs", features = ["client"] }
+stubs = { package = "dcs-grpc-stubs", git = "https://github.com/DCS-gRPC/rust-server.git", branch = "transform", features = ["client"] }
 tacview = { version = "0.1" }
 thiserror = "1.0"
 time = { version = "0.3", features = ["local-offset", "formatting", "parsing"] }
