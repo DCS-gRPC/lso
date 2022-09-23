@@ -84,7 +84,7 @@ pub fn is_recovery_attempt(carrier: &Transform, plane: &Transform) -> bool {
 
     // Does the nose of the plane roughly point towards the carrier?
     let dot = plane
-        .velocity
+        .forward
         .normalized()
         .dot(ray_from_plane_to_carrier.normalized());
     if dot < 0.65 {

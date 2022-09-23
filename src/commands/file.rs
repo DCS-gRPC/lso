@@ -230,7 +230,6 @@ impl CarrierPlanePair {
                         new_pos.z = v;
                     }
 
-                    transform.velocity = (new_pos - transform.position) / (time - transform.time);
                     transform.position = new_pos;
                     transform.time = time;
 

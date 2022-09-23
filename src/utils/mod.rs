@@ -1,4 +1,5 @@
 pub mod interval;
+pub mod precision;
 pub mod shutdown;
 
 pub fn m_to_nm(m: f64) -> f64 {
