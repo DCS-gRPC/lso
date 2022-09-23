@@ -4,6 +4,8 @@ mod data;
 mod draw;
 mod error;
 mod tasks;
+#[cfg(test)]
+mod tests;
 mod track;
 mod transform;
 mod utils;

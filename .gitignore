@@ -2,7 +2,6 @@
 !.gitignore
 !.cargo
 /target
-/tests
 /*.png
 /*.acmi
 notes*

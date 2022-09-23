@@ -27,3 +27,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 ultraviolet = { version = "0.9", features = ["f64"] }
 zip = "0.6"
+
+[dev-dependencies]
+tracing-test = "0.2"

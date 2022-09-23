@@ -78,7 +78,7 @@ pub fn draw_chart(
             match track.grading {
                 Grading::Unknown => Cow::Borrowed("unknown"),
                 Grading::Bolter => Cow::Borrowed("Bolter"),
-                Grading::Recovered { cable } => cable
+                Grading::Recovered { cable, .. } => cable
                     .map(|c| Cow::Owned(format!("#{}", c)))
                     .unwrap_or(Cow::Borrowed("-")),
             }

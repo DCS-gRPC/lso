@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::io::Read;
 use std::ops::Neg;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -8,7 +9,7 @@ use std::time::Instant;
 use crate::draw::DrawError;
 use crate::tasks::detect_recovery_attempt::is_recovery_attempt;
 use crate::tasks::record_recovery::FILENAME_DATETIME_FORMAT;
-use crate::track::Track;
+use crate::track::{Track, TrackResult};
 use crate::transform::Transform;
 use tacview::record::{Event, EventKind, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
@@ -24,7 +25,28 @@ pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
     let start = Instant::now();
 
     let mut file = File::open(opts.input)?;
-    let parser = tacview::Parser::new_compressed(&mut file)?;
+    let mut tracks = extract_tracks(&mut file)?;
+    for track in &mut tracks {
+        track.draw()?;
+    }
+
+    println!("Took: {:.4}s", start.elapsed().as_secs_f64());
+
+    Ok(())
+}
+
+#[allow(unused)] // used in integration tests
+pub fn extract_recoveries(rd: &mut impl Read) -> Result<Vec<TrackResult>, crate::error::Error> {
+    let mut tracks = extract_tracks(rd)?;
+    Ok(tracks
+        .into_iter()
+        .filter(|t| t.is_recovery_attempt)
+        .map(|t| t.datums.finish())
+        .collect())
+}
+
+fn extract_tracks(rd: &mut impl Read) -> Result<Vec<CarrierPlanePair>, crate::error::Error> {
+    let parser = tacview::Parser::new_compressed(rd)?;
 
     let mut recording_time =
         OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
@@ -125,18 +147,32 @@ pub fn execute(opts: Opts) -> Result<(), crate::error::Error> {
                 }
             }
 
+            Record::Event(Event {
+                kind: EventKind::Message,
+                mut params,
+                text: Some(dcs_grading),
+            }) => {
+                if let Some((carrier_id, plane_id)) = params
+                    .pop()
+                    .and_then(|id| u64::from_str(&id).ok())
+                    .zip(params.pop().and_then(|id| u64::from_str(&id).ok()))
+                {
+                    tracing::trace!(carrier_id, plane_id, dcs_grading, "dcs lso grading");
+                    for track in &mut tracks {
+                        track.dcs_grading(carrier_id, plane_id, &dcs_grading);
+                    }
+                }
+            }
+
             _ => {}
         }
     }
 
     for track in &mut tracks {
         track.process_frame()?;
-        track.draw()?;
     }
 
-    println!("Took: {:.4}s", start.elapsed().as_secs_f64());
-
-    Ok(())
+    Ok(tracks)
 }
 
 struct CarrierPlanePair {
@@ -148,6 +184,7 @@ struct CarrierPlanePair {
     plane: Transform,
     is_recovery_attempt: bool,
     is_dirty: bool,
+    is_done: bool,
     datums: Track,
     landed: bool,
 }
@@ -168,6 +205,7 @@ impl CarrierPlanePair {
             plane: Default::default(),
             is_recovery_attempt: false,
             is_dirty: false,
+            is_done: false,
             datums: Track::new(pilot_name),
             landed: false,
         }
@@ -255,8 +293,14 @@ impl CarrierPlanePair {
         }
     }
 
+    fn dcs_grading(&mut self, carrier_id: u64, plane_id: u64, dcs_grading: &str) {
+        if self.carrier_id == carrier_id && self.plane_id == plane_id {
+            self.datums.set_dcs_grading(dcs_grading.to_string());
+        }
+    }
+
     fn process_frame(&mut self) -> Result<(), DrawError> {
-        if !self.is_dirty {
+        if !self.is_dirty || self.is_done {
             return Ok(());
         }
 
@@ -273,7 +317,7 @@ impl CarrierPlanePair {
                 should_continue = false;
             }
             if !should_continue {
-                self.draw()?;
+                self.is_done = true;
             }
         } else if is_recovery_attempt(&self.carrier, &self.plane) {
             self.is_recovery_attempt = true;

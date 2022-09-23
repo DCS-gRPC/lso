@@ -221,7 +221,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
 
                     recording.write(record::Event {
                         kind: record::EventKind::Message,
-                        params: vec!["2".to_string()],
+                        params: vec!["2".to_string(), "1".to_string()],
                         text: Some(comment),
                     })?;
                 }
@@ -327,7 +327,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     match track.grading {
                         Grading::Unknown => Cow::Borrowed("unknown"),
                         Grading::Bolter => Cow::Borrowed("Bolter"),
-                        Grading::Recovered { cable } => cable
+                        Grading::Recovered { cable, .. } => cable
                             .map(|c| Cow::Owned(format!("#{}", c)))
                             .unwrap_or(Cow::Borrowed("-")),
                     },

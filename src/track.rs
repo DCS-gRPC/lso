@@ -1,11 +1,12 @@
 use std::ops::Neg;
+use std::str::FromStr;
 
 use ultraviolet::{DRotor3, DVec3};
 
 use crate::data;
 use crate::transform::Transform;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Datum {
     pub x: f64,
     pub y: f64,
@@ -21,13 +22,17 @@ pub struct Track {
     dcs_grading: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Grading {
     Unknown,
     Bolter,
-    Recovered { cable: Option<u8> },
+    Recovered {
+        cable: Option<u8>,
+        cable_estimated: Option<u8>,
+    },
 }
 
+#[derive(Debug, PartialEq)]
 pub struct TrackResult {
     pub pilot_name: String,
     pub grading: Grading,
@@ -112,14 +117,38 @@ impl Track {
 
     pub fn landed(&mut self, carrier: &Transform, plane: &Transform) {
         let cable = get_cable(carrier, plane);
-        self.grading = Some(Grading::Recovered { cable });
+        self.grading = Some(Grading::Recovered {
+            cable,
+            cable_estimated: cable,
+        });
         tracing::debug!(?cable, "landed, stop tracking");
     }
 
     pub fn finish(self) -> TrackResult {
+        // If DCS grading is set, use its reported wire instead of the estimated one.
+        let grading = if let Some(dcs_wire) = self.dcs_grading.as_ref().and_then(|s| {
+            s.split_once("WIRE# ")
+                .and_then(|(_, w)| u8::from_str(w).ok())
+        }) {
+            match self.grading {
+                Some(Grading::Recovered {
+                    cable_estimated, ..
+                }) => Grading::Recovered {
+                    cable: Some(dcs_wire),
+                    cable_estimated,
+                },
+                _ => Grading::Recovered {
+                    cable: Some(dcs_wire),
+                    cable_estimated: None,
+                },
+            }
+        } else {
+            self.grading.unwrap_or_default()
+        };
+
         TrackResult {
             pilot_name: self.pilot_name,
-            grading: self.grading.unwrap_or_default(),
+            grading,
             dcs_grading: self.dcs_grading,
             datums: self.datums,
         }
@@ -150,7 +179,11 @@ fn get_cable(carrier: &Transform, plane: &Transform) -> Option<u8> {
         let mid_cable = pendants.0 - mid_cable;
 
         // compensate for cable hitbox
-        let mid_cable = mid_cable + (carrier.forward * 2.0);
+        let mid_cable = mid_cable
+            - (carrier
+                .forward
+                .rotated_by(DRotor3::from_rotation_xz(-data::NIMITZ.deck_angle))
+                * 3.0);
 
         let mid_cable = carrier.position + mid_cable.rotated_by(carrier.rotation);
 
