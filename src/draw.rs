@@ -72,16 +72,13 @@ pub fn draw_chart(
     )?;
 
     root_drawing_area.draw_text(
-        &format!(
-            "Grading: {}",
-            match track.grading {
-                Grading::Unknown => Cow::Borrowed("unknown"),
-                Grading::Bolter => Cow::Borrowed("Bolter"),
-                Grading::Recovered { cable, .. } => cable
-                    .map(|c| Cow::Owned(format!("#{}", c)))
-                    .unwrap_or(Cow::Borrowed("-")),
-            }
-        ),
+        &match track.grading {
+            Grading::Unknown => Cow::Borrowed(""),
+            Grading::Bolter => Cow::Borrowed("Bolter"),
+            Grading::Recovered { cable, .. } => cable
+                .map(|c| Cow::Owned(format!("Cable {}", c)))
+                .unwrap_or(Cow::Borrowed("(failed to detect cable)")),
+        },
         &text_style,
         (16, 48),
     )?;
