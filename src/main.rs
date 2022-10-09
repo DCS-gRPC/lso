@@ -28,7 +28,11 @@ struct Opts {
 
 #[derive(clap::Parser)]
 enum Command {
+    /// Connect to DCS-gRPC to track carrier recoveries.
     Run(commands::run::Opts),
+
+    /// Extract carrier recoveries from ACMI recordings (must be recordings created by the LSO;
+    /// recordings directly from TacView will not work).
     File(commands::file::Opts),
 }
 

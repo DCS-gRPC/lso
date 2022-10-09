@@ -19,6 +19,8 @@ use ultraviolet::{DRotor3, DVec3};
 
 #[derive(clap::Parser)]
 pub struct Opts {
+    /// The path to the ACMI recording recoveries should be extracted from (must be recordings
+    /// created by the LSO; recordings directly from TacView will not work).
     input: PathBuf,
 }
 

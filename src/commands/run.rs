@@ -22,14 +22,23 @@ use tonic::Status;
 
 #[derive(clap::Parser)]
 pub struct Opts {
+    /// The directory the carrier recovery recordings should be saved to.
     #[clap(short = 'o', long, default_value = ".")]
     out_dir: PathBuf,
+
+    /// The URI of DCS-gRPC.
     #[clap(long, default_value = "http://127.0.0.1:50051")]
     uri: Uri,
+
+    /// A Discord webhook recovery recordings should be posted to.
     #[clap(long)]
     discord_webhook: Option<String>,
+
+    /// A JSON file that maps player names to Discord user IDs.
     #[clap(long)]
     discord_users: Option<PathBuf>,
+
+    /// Whether to also record carrier recoveries of KI units (mostly useful for testing/debugging).
     #[clap(long = "ki")]
     include_ki: bool,
 }
