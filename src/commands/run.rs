@@ -28,6 +28,8 @@ pub struct Opts {
     discord_webhook: Option<String>,
     #[clap(long)]
     discord_users: Option<PathBuf>,
+    #[clap(long = "ki")]
+    include_ki: bool,
 }
 
 pub async fn execute(
@@ -138,7 +140,7 @@ async fn run<'a>(
 
     for units in group_units {
         for unit in units {
-            match check_candidate(&mut unit_svc, &unit).await? {
+            match check_candidate(&mut unit_svc, &unit, opts.include_ki).await? {
                 Some(Candidate::Plane(plane_info)) => {
                     planes.insert(
                         unit.name,
@@ -211,6 +213,7 @@ async fn run<'a>(
         .await?
         .into_inner();
     let tx = tx.clone();
+    let include_ki = opts.include_ki;
     tokio::spawn(async move {
         while let Some(event) = events.next().await {
             let event = match event {
@@ -232,7 +235,7 @@ async fn run<'a>(
                 ..
             }) = event
             {
-                match check_candidate(&mut unit_svc, &unit).await {
+                match check_candidate(&mut unit_svc, &unit, include_ki).await {
                     Ok(Some(Candidate::Plane(plane_info))) => {
                         for (carrier_name, carrier_info) in &carriers {
                             spawn_detect_recovery_attempt(
@@ -285,11 +288,10 @@ enum Candidate {
 async fn check_candidate(
     svc: &mut UnitServiceClient<Channel>,
     unit: &common::v0::Unit,
+    include_ki: bool,
 ) -> Result<Option<Candidate>, Status> {
     match GroupCategory::from_i32(unit.group.as_ref().map(|g| g.category).unwrap_or(-1)) {
-        // TODO: only players
-        // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
-        Some(GroupCategory::Airplane) => {
+        Some(GroupCategory::Airplane) if unit.player_name.is_some() || include_ki => {
             return Ok(AirplaneInfo::by_type(&unit.r#type).map(Candidate::Plane))
         }
         Some(GroupCategory::Ship) => {

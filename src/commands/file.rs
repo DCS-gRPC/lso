@@ -124,7 +124,6 @@ fn extract_tracks(rd: &mut impl Read) -> Result<Vec<CarrierPlanePair>, crate::er
                                 None => tracing::trace!(name, "unsupported aircraft carrier"),
                             }
                         } else if tags.contains(&Tag::FixedWing) {
-                            // TODO: filter players
                             match AirplaneInfo::by_type(name) {
                                 Some(plane_info) => {
                                     for (carrier_id, carrier_info) in &carriers {
