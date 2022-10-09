@@ -78,7 +78,7 @@ impl Track {
         let distance = ray_from_plane_to_carrier.mag();
         if distance < self.previous_distance {
             self.previous_distance = distance;
-        } else if distance - self.previous_distance > 100.0 {
+        } else if distance - self.previous_distance > 150.0 {
             if self.grading.is_some() {
                 tracing::debug!(distance_in_m = distance, "bolter detected");
                 self.grading = Some(Grading::Bolter);

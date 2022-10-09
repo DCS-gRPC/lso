@@ -78,10 +78,14 @@ static FA18C: AirplaneInfo = AirplaneInfo {
         y: -2.240897,
         z: -7.237348,
     },
-    hook_joint: DVec3 {
+    glide_slope: 3.5,
+};
+
+static F14: AirplaneInfo = AirplaneInfo {
+    hook: DVec3 {
         x: 0.0,
-        y: -0.717587,
-        z: -6.231369,
+        y: -1.978941,
+        z: -6.563727,
     },
     glide_slope: 3.5,
 };
@@ -126,9 +130,6 @@ impl CarrierInfo {
 pub struct AirplaneInfo {
     /// Hook position relative to the object's origin.
     pub hook: DVec3,
-    /// Hook join (where the hook is attached to the plane) position relative to the object's
-    /// origin.
-    pub hook_joint: DVec3,
     /// The optimal glide slope in degrees.
     pub glide_slope: f64,
 }
@@ -137,6 +138,7 @@ impl AirplaneInfo {
     pub fn by_type(t: &str) -> Option<&'static Self> {
         match t {
             "FA-18C_hornet" => Some(&FA18C),
+            "F-14A-135-GR" | "F-14B" => Some(&F14),
             t => None,
         }
     }
