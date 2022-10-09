@@ -10,7 +10,7 @@ mod track;
 mod transform;
 mod utils;
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter, fmt};
@@ -20,8 +20,8 @@ use utils::shutdown::Shutdown;
 #[clap(version = env!("CARGO_PKG_VERSION"))]
 struct Opts {
     /// A level of verbosity, and can be used multiple times
-    #[clap(short, long, parse(from_occurrences))]
-    verbose: i32,
+    #[clap(short, long, action = ArgAction::Count)]
+    verbose: u8,
     #[clap(subcommand)]
     command: Command,
 }
