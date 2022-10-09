@@ -28,12 +28,21 @@ test_recording!(
     1,
     1
 );
+
 test_recording!(
     wire_2_01,
     "../tests/recordings/wire_2_01_FA18C.zip.acmi",
     2,
     2
 );
+
+test_recording!(
+    wire_3_01,
+    "../tests/recordings/wire_3_01_T45.zip.acmi",
+    3,
+    3
+);
+
 test_recording!(
     wire_4_01,
     "../tests/recordings/wire_4_01_FA18C.zip.acmi",

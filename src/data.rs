@@ -90,6 +90,15 @@ static F14: AirplaneInfo = AirplaneInfo {
     glide_slope: 3.5,
 };
 
+static T45: AirplaneInfo = AirplaneInfo {
+    hook: DVec3 {
+        x: 0.0,
+        y: -1.778766,
+        z: -4.782536,
+    },
+    glide_slope: 3.5,
+};
+
 #[derive(Debug)]
 pub struct CarrierInfo {
     /// Counter-clockwise offset from BRC to FB in degrees.
@@ -139,6 +148,7 @@ impl AirplaneInfo {
         match t {
             "FA-18C_hornet" => Some(&FA18C),
             "F-14A-135-GR" | "F-14B" => Some(&F14),
+            "T-45" => Some(&T45),
             t => None,
         }
     }

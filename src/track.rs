@@ -137,7 +137,7 @@ impl Track {
         // If DCS grading is set, use its reported wire instead of the estimated one.
         let grading = if let Some(dcs_wire) = self.dcs_grading.as_ref().and_then(|s| {
             s.split_once("WIRE# ")
-                .and_then(|(_, w)| u8::from_str(w).ok())
+                .and_then(|(_, w)| u8::from_str(&w[0..1]).ok())
         }) {
             match self.grading {
                 Some(Grading::Recovered {
