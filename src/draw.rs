@@ -13,7 +13,6 @@ use plotters::style::{Color, IntoFont, RGBColor, TextStyle};
 use plotters_bitmap::bitmap_pixel::RGBPixel;
 use plotters_bitmap::BitMapBackend;
 
-use crate::data;
 use crate::track::{Datum, Grading, TrackResult};
 use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft, nm_to_m};
 
@@ -249,13 +248,13 @@ pub fn draw_side_view(
 
     // draw centerline
     let lines = [
-        (data::FA18C.glide_slope - 0.9, THEME_GUIDE_RED),
-        (data::FA18C.glide_slope - 0.6, THEME_GUIDE_YELLOW),
-        (data::FA18C.glide_slope - 0.25, THEME_GUIDE_GREEN),
-        (data::FA18C.glide_slope, THEME_GUIDE_GRAY),
-        (data::FA18C.glide_slope + 0.25, THEME_GUIDE_GREEN),
-        (data::FA18C.glide_slope + 0.7, THEME_GUIDE_YELLOW),
-        (data::FA18C.glide_slope + 1.5, THEME_GUIDE_RED),
+        (track.glide_slope - 0.9, THEME_GUIDE_RED),
+        (track.glide_slope - 0.6, THEME_GUIDE_YELLOW),
+        (track.glide_slope - 0.25, THEME_GUIDE_GREEN),
+        (track.glide_slope, THEME_GUIDE_GRAY),
+        (track.glide_slope + 0.25, THEME_GUIDE_GREEN),
+        (track.glide_slope + 0.7, THEME_GUIDE_YELLOW),
+        (track.glide_slope + 1.5, THEME_GUIDE_RED),
     ];
 
     for (deg, color) in lines {

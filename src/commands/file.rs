@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::ops::Neg;
@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Instant;
 
+use crate::data::{AirplaneInfo, CarrierInfo};
 use crate::draw::DrawError;
 use crate::tasks::detect_recovery_attempt::is_recovery_attempt;
 use crate::tasks::record_recovery::FILENAME_DATETIME_FORMAT;
@@ -50,8 +51,8 @@ fn extract_tracks(rd: &mut impl Read) -> Result<Vec<CarrierPlanePair>, crate::er
 
     let mut recording_time =
         OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
-    let mut carriers: HashSet<u64> = HashSet::new();
-    let mut planes: HashMap<u64, String> = HashMap::new();
+    let mut carriers: HashMap<u64, &'static CarrierInfo> = HashMap::new();
+    let mut planes: HashMap<u64, (String, &'static AirplaneInfo)> = HashMap::new();
     let mut tracks: Vec<CarrierPlanePair> = Vec::new();
 
     let mut time = 0.0;
@@ -76,7 +77,7 @@ fn extract_tracks(rd: &mut impl Read) -> Result<Vec<CarrierPlanePair>, crate::er
             }
 
             Record::Update(update) => {
-                if !carriers.contains(&update.id) && !planes.contains_key(&update.id) {
+                if !carriers.contains_key(&update.id) && !planes.contains_key(&update.id) {
                     let pilot_name = update
                         .props
                         .iter()
@@ -88,6 +89,13 @@ fn extract_tracks(rd: &mut impl Read) -> Result<Vec<CarrierPlanePair>, crate::er
                             }
                         })
                         .unwrap_or("KI");
+                    let name = update.props.iter().find_map(|p| {
+                        if let Property::Name(name) = p {
+                            Some(name)
+                        } else {
+                            None
+                        }
+                    });
                     let tags = update.props.iter().find_map(|p| {
                         if let Property::Type(tags) = p {
                             Some(tags)
@@ -96,30 +104,44 @@ fn extract_tracks(rd: &mut impl Read) -> Result<Vec<CarrierPlanePair>, crate::er
                         }
                     });
 
-                    if let Some(tags) = tags {
+                    if let Some((name, tags)) = name.zip(tags) {
                         if tags.contains(&Tag::AircraftCarrier) {
-                            for (plane_id, pilot_name) in &planes {
-                                tracks.push(CarrierPlanePair::new(
-                                    recording_time + Duration::seconds_f64(time),
-                                    update.id,
-                                    *plane_id,
-                                    pilot_name,
-                                ));
-                            }
+                            match CarrierInfo::by_type(name) {
+                                Some(carrier_info) => {
+                                    for (plane_id, (pilot_name, plane_info)) in &planes {
+                                        tracks.push(CarrierPlanePair::new(
+                                            recording_time + Duration::seconds_f64(time),
+                                            update.id,
+                                            carrier_info,
+                                            *plane_id,
+                                            pilot_name,
+                                            plane_info,
+                                        ));
+                                    }
 
-                            carriers.insert(update.id);
+                                    carriers.insert(update.id, carrier_info);
+                                }
+                                None => tracing::trace!(name, "unsupported aircraft carrier"),
+                            }
                         } else if tags.contains(&Tag::FixedWing) {
                             // TODO: filter players
-                            for carrier_id in &carriers {
-                                tracks.push(CarrierPlanePair::new(
-                                    recording_time + Duration::seconds_f64(time),
-                                    *carrier_id,
-                                    update.id,
-                                    pilot_name,
-                                ));
-                            }
+                            match AirplaneInfo::by_type(name) {
+                                Some(plane_info) => {
+                                    for (carrier_id, carrier_info) in &carriers {
+                                        tracks.push(CarrierPlanePair::new(
+                                            recording_time + Duration::seconds_f64(time),
+                                            *carrier_id,
+                                            carrier_info,
+                                            update.id,
+                                            pilot_name,
+                                            plane_info,
+                                        ));
+                                    }
 
-                            planes.insert(update.id, pilot_name.to_string());
+                                    planes.insert(update.id, (pilot_name.to_string(), plane_info));
+                                }
+                                None => tracing::trace!(name, "unsupported fixed wing aircraft"),
+                            }
                         }
                     }
                 }
@@ -180,8 +202,10 @@ struct CarrierPlanePair {
     pilot_name: String,
     carrier_id: u64,
     carrier: Transform,
+    carrier_info: &'static CarrierInfo,
     plane_id: u64,
     plane: Transform,
+    plane_info: &'static AirplaneInfo,
     is_recovery_attempt: bool,
     is_dirty: bool,
     is_done: bool,
@@ -193,20 +217,24 @@ impl CarrierPlanePair {
     fn new(
         recording_time: OffsetDateTime,
         carrier_id: u64,
+        carrier_info: &'static CarrierInfo,
         plane_id: u64,
         pilot_name: &str,
+        plane_info: &'static AirplaneInfo,
     ) -> Self {
         Self {
             recording_time,
             pilot_name: pilot_name.to_string(),
             carrier_id,
             carrier: Default::default(),
+            carrier_info,
             plane_id,
             plane: Default::default(),
+            plane_info,
             is_recovery_attempt: false,
             is_dirty: false,
             is_done: false,
-            datums: Track::new(pilot_name),
+            datums: Track::new(pilot_name, carrier_info, plane_info),
             landed: false,
         }
     }
@@ -339,7 +367,11 @@ impl CarrierPlanePair {
                     .filter(|c| c.is_ascii_alphanumeric())
                     .collect::<String>()
             );
-            let track = std::mem::replace(&mut self.datums, Track::new(&self.pilot_name)).finish();
+            let track = std::mem::replace(
+                &mut self.datums,
+                Track::new(&self.pilot_name, self.carrier_info, self.plane_info),
+            )
+            .finish();
             crate::draw::draw_chart(&out_dir, &filename, &track)?;
             self.is_recovery_attempt = false;
             self.landed = false;

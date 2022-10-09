@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::data::{AirplaneInfo, CarrierInfo};
 use crate::tasks::TaskParams;
 use crate::utils::shutdown::ShutdownHandle;
 use backoff::ExponentialBackoff;
@@ -132,17 +133,24 @@ async fn run<'a>(
     )
     .await?;
 
-    let mut planes = Vec::new();
-    let mut carriers = Vec::new();
+    let mut planes: HashMap<String, (String, &'static AirplaneInfo)> = HashMap::new();
+    let mut carriers: HashMap<String, &'static CarrierInfo> = HashMap::new();
 
     for units in group_units {
         for unit in units {
             match check_candidate(&mut unit_svc, &unit).await? {
-                Some(Candidate::Plane) => planes.push((
-                    unit.name,
-                    unit.player_name.unwrap_or_else(|| String::from("KI")),
-                )),
-                Some(Candidate::Carrier) => carriers.push(unit.name),
+                Some(Candidate::Plane(plane_info)) => {
+                    planes.insert(
+                        unit.name,
+                        (
+                            unit.player_name.unwrap_or_else(|| String::from("KI")),
+                            plane_info,
+                        ),
+                    );
+                }
+                Some(Candidate::Carrier(carrier_info)) => {
+                    carriers.insert(unit.name, carrier_info);
+                }
                 None => {}
             }
         }
@@ -153,7 +161,11 @@ async fn run<'a>(
     let discord_webhook = opts.discord_webhook.clone();
     let tx2 = tx.clone();
     let spawn_detect_recovery_attempt =
-        move |carrier_name: String, plane_name: String, pilot_name: String| {
+        move |carrier_name: String,
+              carrier_info: &'static CarrierInfo,
+              plane_name: String,
+              plane_info: &'static AirplaneInfo,
+              pilot_name: String| {
             let out_dir = out_dir.clone();
             let discord_webhook = discord_webhook.clone();
             let users = users.clone();
@@ -170,6 +182,8 @@ async fn run<'a>(
                         carrier_name: &carrier_name,
                         plane_name: &plane_name,
                         pilot_name: &pilot_name,
+                        carrier_info,
+                        plane_info,
                         shutdown: shutdown_handle,
                     })
                     .await
@@ -179,11 +193,13 @@ async fn run<'a>(
             });
         };
 
-    for carrier_name in &carriers {
-        for (plane_name, pilot_name) in &planes {
+    for (carrier_name, carrier_info) in &carriers {
+        for (plane_name, (pilot_name, plane_info)) in &planes {
             spawn_detect_recovery_attempt(
                 carrier_name.clone(),
+                carrier_info,
                 plane_name.clone(),
+                plane_info,
                 pilot_name.clone(),
             );
         }
@@ -217,22 +233,26 @@ async fn run<'a>(
             }) = event
             {
                 match check_candidate(&mut unit_svc, &unit).await {
-                    Ok(Some(Candidate::Plane)) => {
-                        for carrier_name in &carriers {
+                    Ok(Some(Candidate::Plane(plane_info))) => {
+                        for (carrier_name, carrier_info) in &carriers {
                             spawn_detect_recovery_attempt(
                                 carrier_name.clone(),
+                                carrier_info,
                                 unit.name.clone(),
+                                plane_info,
                                 unit.player_name
                                     .clone()
                                     .unwrap_or_else(|| String::from("KI")),
                             );
                         }
                     }
-                    Ok(Some(Candidate::Carrier)) => {
-                        for (plane_name, pilot_name) in &planes {
+                    Ok(Some(Candidate::Carrier(carrier_info))) => {
+                        for (plane_name, (pilot_name, plane_info)) in &planes {
                             spawn_detect_recovery_attempt(
                                 unit.name.clone(),
+                                carrier_info,
                                 plane_name.clone(),
+                                plane_info,
                                 pilot_name.clone(),
                             );
                         }
@@ -256,9 +276,10 @@ async fn run<'a>(
     }
 }
 
+#[derive(Debug)]
 enum Candidate {
-    Carrier,
-    Plane,
+    Carrier(&'static CarrierInfo),
+    Plane(&'static AirplaneInfo),
 }
 
 async fn check_candidate(
@@ -268,7 +289,9 @@ async fn check_candidate(
     match GroupCategory::from_i32(unit.group.as_ref().map(|g| g.category).unwrap_or(-1)) {
         // TODO: only players
         // Some(UnitCategory::UnitAirplane) if unit.player_name.is_some() => {
-        Some(GroupCategory::Airplane) => return Ok(Some(Candidate::Plane)),
+        Some(GroupCategory::Airplane) => {
+            return Ok(AirplaneInfo::by_type(&unit.r#type).map(Candidate::Plane))
+        }
         Some(GroupCategory::Ship) => {
             let attrs = svc
                 .get_descriptor(unit::v0::GetDescriptorRequest {
@@ -282,7 +305,7 @@ async fn check_candidate(
                 .iter()
                 .any(|a| a.as_str() == "AircraftCarrier With Arresting Gear")
             {
-                return Ok(Some(Candidate::Carrier));
+                return Ok(CarrierInfo::by_type(&unit.r#type).map(Candidate::Carrier));
             }
         }
         _ => {}

@@ -56,7 +56,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
 
     let mut acmi = Cursor::new(Vec::new());
     let mut recording = tacview::Writer::new_compressed(&mut acmi)?;
-    let mut datums = Track::new(params.pilot_name);
+    let mut datums = Track::new(params.pilot_name, params.carrier_info, params.plane_info);
 
     let reference_time = mission.get_scenario_start_time().await?;
     recording.write(GlobalProperty::ReferenceTime(reference_time))?;

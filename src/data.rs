@@ -10,7 +10,7 @@ use ultraviolet::{DRotor3, DVec3};
 //    scripts\USS_Nimitz_RunwaysAndRoutes.lua`)
 // 3. Read P position row as (z, y, x)
 
-pub const NIMITZ: CarrierInfo = CarrierInfo {
+const NIMITZ: CarrierInfo = CarrierInfo {
     // CoreMods\tech\USS_Nimitz\scripts\USS_Nimitz_RunwaysAndRoutes.lua
     deck_angle: 9.1359,
     deck_altitude: 20.1494,
@@ -72,7 +72,7 @@ pub const NIMITZ: CarrierInfo = CarrierInfo {
     ),
 };
 
-pub static FA18C: AirplaneInfo = AirplaneInfo {
+static FA18C: AirplaneInfo = AirplaneInfo {
     hook: DVec3 {
         x: 0.0,
         y: -2.240897,
@@ -86,6 +86,7 @@ pub static FA18C: AirplaneInfo = AirplaneInfo {
     glide_slope: 3.5,
 };
 
+#[derive(Debug)]
 pub struct CarrierInfo {
     /// Counter-clockwise offset from BRC to FB in degrees.
     pub deck_angle: f64,
@@ -112,8 +113,16 @@ impl CarrierInfo {
 
         touchdown_at - hook_offset
     }
+
+    pub fn by_type(t: &str) -> Option<&'static Self> {
+        match t {
+            "CVN_71" | "CVN_72" | "CVN_73" | "CVN_75" | "Stennis" => Some(&NIMITZ),
+            t => None,
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct AirplaneInfo {
     /// Hook position relative to the object's origin.
     pub hook: DVec3,
@@ -122,4 +131,13 @@ pub struct AirplaneInfo {
     pub hook_joint: DVec3,
     /// The optimal glide slope in degrees.
     pub glide_slope: f64,
+}
+
+impl AirplaneInfo {
+    pub fn by_type(t: &str) -> Option<&'static Self> {
+        match t {
+            "FA-18C_hornet" => Some(&FA18C),
+            t => None,
+        }
+    }
 }
