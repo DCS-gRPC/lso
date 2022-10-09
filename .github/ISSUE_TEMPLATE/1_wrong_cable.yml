@@ -1,5 +1,5 @@
 name: Wrong Cable Detected
-description: Report a recovery where the LSO detected the wrong Cable
+description: Report a recovery where the LSO detected the wrong cable
 body:
   - type: dropdown
     attributes:
