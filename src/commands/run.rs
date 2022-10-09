@@ -17,13 +17,15 @@ use stubs::mission::v0::stream_events_response::Event;
 use stubs::unit::v0::unit_service_client::UnitServiceClient;
 use stubs::{coalition, common, group, mission, unit};
 use tokio::sync::mpsc;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Channel, Endpoint, Uri};
 use tonic::Status;
 
 #[derive(clap::Parser)]
 pub struct Opts {
     #[clap(short = 'o', long, default_value = ".")]
     out_dir: PathBuf,
+    #[clap(long, default_value = "http://127.0.0.1:50051")]
+    uri: Uri,
     #[clap(long)]
     discord_webhook: Option<String>,
     #[clap(long)]
@@ -40,8 +42,7 @@ pub async fn execute(
         tracing::info!("Discord integration enabled.");
     }
 
-    let addr = "http://127.0.0.1:50051"; // TODO: move to config
-    tracing::info!(endpoint = addr, "Connecting to gRPC server");
+    tracing::info!(uri = %opts.uri, "Connecting to gRPC server");
 
     let users: Arc<HashMap<String, u64>> =
         Arc::new(if let Some(path) = opts.discord_users.as_deref() {
@@ -64,7 +65,7 @@ pub async fn execute(
             // on each try, run the program and consider every error as transient (ie. worth
             // retrying)
             || async {
-                run(&opts, addr, users.clone(), shutdown_handle.clone())
+                run(&opts, users.clone(), shutdown_handle.clone())
                     .await
                     .map_err(backoff::Error::transient)
             },
@@ -84,14 +85,13 @@ pub async fn execute(
     Ok(())
 }
 
-async fn run<'a>(
-    opts: &'a Opts,
-    addr: &'static str,
+async fn run(
+    opts: &Opts,
     users: Arc<HashMap<String, u64>>,
     shutdown_handle: ShutdownHandle,
 ) -> Result<(), crate::error::Error> {
     let out_dir = opts.out_dir.clone();
-    let channel = Endpoint::from_static(addr)
+    let channel = Endpoint::from(opts.uri.clone())
         .keep_alive_while_idle(true)
         .connect()
         .await?;
