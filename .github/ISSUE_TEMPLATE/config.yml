@@ -1,0 +1,7 @@
+contact_links:
+  - name: Feature Suggestion
+    about: Suggest a new feature.
+    url: https://github.com/DCS-gRPC/lso/discussions/new
+  - name: Other
+    about: Use this for anything not covered by the options above.
+    url: https://github.com/DCS-gRPC/lso/discussions/new

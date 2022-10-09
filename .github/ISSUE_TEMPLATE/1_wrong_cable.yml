@@ -1,0 +1,37 @@
+name: Wrong Cable Detected
+description: Report a recovery where the LSO detected the wrong Cable
+body:
+  - type: dropdown
+    attributes:
+      label: Reported Cable
+      description: Which cable got reported?
+      options:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "Bolter"
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Expected Cable
+      description: Which cable was actually caught?
+      options:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "Bolter"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: ACMI Recording
+      description: Please upload the `.zip.acmi` file that was created for the recovery (by the LSO; not by TacView).
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Remarks
+      description: Anything else worth mentioning?
