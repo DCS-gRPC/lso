@@ -72,6 +72,68 @@ const NIMITZ: CarrierInfo = CarrierInfo {
     ),
 };
 
+const FORRESTAL: CarrierInfo = CarrierInfo {
+    // CoreMods\tech\USS_Nimitz\scripts\USS_Nimitz_RunwaysAndRoutes.lua
+    deck_angle: 9.42,
+    deck_altitude: 18.46,
+    cable1: (
+        // POINT_TROS_01_01
+        DVec3 {
+            x: -17.749493,
+            y: 18.474249,
+            z: -96.792412,
+        },
+        // POINT_TROS_01_02
+        DVec3 {
+            x: 17.089462,
+            y: 18.474247,
+            z: -90.162186,
+        },
+    ),
+    cable2: (
+        // POINT_TROS_02_01
+        DVec3 {
+            x: -19.516848,
+            y: 18.475485,
+            z: -87.192558,
+        },
+        // POINT_TROS_02_02
+        DVec3 {
+            x: 15.311986,
+            y: 18.475483,
+            z: -80.510368,
+        },
+    ),
+    cable3: (
+        // POINT_TROS_03_01
+        DVec3 {
+            x: -21.246920,
+            y: 18.482229,
+            z: -76.618980,
+        },
+        // POINT_TROS_03_02
+        DVec3 {
+            x: 13.582755,
+            y: 18.482227,
+            z: -69.941109,
+        },
+    ),
+    cable4: (
+        // POINT_TROS_04_01
+        DVec3 {
+            x: -23.128010,
+            y: 18.491688,
+            z: -66.396812,
+        },
+        // POINT_TROS_04_02
+        DVec3 {
+            x: 11.704433,
+            y: 18.491686,
+            z: -59.733154,
+        },
+    ),
+};
+
 static FA18C: AirplaneInfo = AirplaneInfo {
     hook: DVec3 {
         x: 0.0,
@@ -130,6 +192,7 @@ impl CarrierInfo {
     pub fn by_type(t: &str) -> Option<&'static Self> {
         match t {
             "CVN_71" | "CVN_72" | "CVN_73" | "CVN_75" | "Stennis" => Some(&NIMITZ),
+            "Forrestal" => Some(&FORRESTAL),
             t => None,
         }
     }
