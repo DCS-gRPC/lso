@@ -116,7 +116,7 @@ impl Track {
     }
 
     pub fn landed(&mut self, carrier: &Transform, plane: &Transform) {
-        let cable = get_cable(carrier, plane);
+        let cable = estimate_cable(carrier, plane);
         self.grading = Some(Grading::Recovered {
             cable,
             cable_estimated: cable,
@@ -160,43 +160,70 @@ impl Track {
     }
 }
 
-fn get_cable(carrier: &Transform, plane: &Transform) -> Option<u8> {
+fn estimate_cable(carrier: &Transform, plane: &Transform) -> Option<u8> {
     let hook_offset = data::FA18C.hook.rotated_by(plane.rotation);
     let touchdown = plane.position + hook_offset;
+    let forward = carrier
+        .forward
+        .rotated_by(DRotor3::from_rotation_xz(-data::NIMITZ.deck_angle));
+
+    // The land event is fired shortly after the aircraft caught the wire, so already when the hook
+    // is past the wire it caught. To compensate for that, move the touchdown position 3.0m back.
+    let touchdown = touchdown + (forward * 3.0);
+
+    // For some visual debugging, uncomment the println! lines here and in the `.map()` below and
+    // plot them (e.g. in excel in a scatter graph; plotting the top-down view, so only x/y is
+    // usually enough).
+    // println!("name;x;y;z");
+    // println!(
+    //     "plane_position;{};{};{}",
+    //     plane.position.x, plane.position.z, plane.position.y
+    // );
+    // println!(
+    //     "hook_touchdown;{};{};{}",
+    //     touchdown.x, touchdown.z, touchdown.y
+    // );
 
     let cables = [
         (1, &data::NIMITZ.cable1),
         (2, &data::NIMITZ.cable2),
         (3, &data::NIMITZ.cable3),
         (4, &data::NIMITZ.cable4),
-    ];
-    for (nr, pendants) in cables {
+    ]
+    .into_iter()
+    .map(|(nr, pendants)| {
         // Calculate the mid position between both cable pendants:
         // o-----------o
         //       ^
         //       |
         let mid_cable = (pendants.0 - pendants.1) / 2.0;
         let mid_cable = pendants.0 - mid_cable;
-
-        // compensate for cable hitbox
-        let mid_cable = mid_cable
-            - (carrier
-                .forward
-                .rotated_by(DRotor3::from_rotation_xz(-data::NIMITZ.deck_angle))
-                * 3.0);
-
         let mid_cable = carrier.position + mid_cable.rotated_by(carrier.rotation);
 
+        // println!(
+        //     "cable_{};{};{};{}",
+        //     nr, mid_cable.x, mid_cable.z, mid_cable.y
+        // );
+        // let p0 = carrier.position + pendants.0.rotated_by(carrier.rotation);
+        // let p1 = carrier.position + pendants.1.rotated_by(carrier.rotation);
+        // println!("p0_{};{};{};{}", nr, p0.x, p0.z, p0.y);
+        // println!("p1_{};{};{};{}", nr, p1.x, p1.z, p1.y);
+
+        (nr, mid_cable)
+    })
+    .collect::<Vec<_>>();
+
+    for (nr, mid_cable) in cables {
         // If the cable is in front of the touchdown position, consider it the one the plane
         // catches.
-        let ray_to_cable = mid_cable - touchdown;
+        let ray_to_cable = touchdown - mid_cable;
         tracing::trace!(
             cable = nr,
             distance = ray_to_cable.mag(),
-            dot = ray_to_cable.dot(plane.forward),
+            dot = ray_to_cable.dot(forward),
             "cable candidate"
         );
-        if ray_to_cable.dot(plane.forward) > 0.0 {
+        if ray_to_cable.dot(forward) > 0.0 {
             return Some(nr);
         }
     }
