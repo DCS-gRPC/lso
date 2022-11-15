@@ -88,6 +88,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
     let mut known_carrier_coords = None;
     let mut known_plane_coords = None;
     let mut track_stopped: Option<Instant> = None;
+    let mut lowest_altitude = f64::MAX;
 
     let mut stream = select(interval.map(Either::Left), events.map(Either::Right));
 
@@ -150,6 +151,8 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     recording.write(Record::Frame(carrier.time))?;
                     recording.write(carrier_update)?;
                 }
+
+                lowest_altitude = lowest_altitude.min(plane.alt);
 
                 if !datums.next(&carrier, &plane) {
                     break;
@@ -334,6 +337,13 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                 _ => {}
             },
         }
+    }
+
+    // If the plane was never below 100ft, don't consider it a worthy recovery attempt and discard
+    // the record
+    if lowest_altitude > 100.0 {
+        tracing::debug!("discard as plane was never below 100ft");
+        return Ok(());
     }
 
     recording.into_inner();
