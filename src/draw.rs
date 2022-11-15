@@ -154,7 +154,7 @@ pub fn draw_top_view(
         ))?;
     }
 
-    let track_in_nm = track
+    let mut track_in_nm = track
         .datums
         .iter()
         .map(|d| Datum {
@@ -164,6 +164,20 @@ pub fn draw_top_view(
             alt: d.alt,
         })
         .filter(|d| RANGE_X.contains(&d.x) && TOP_RANGE_Y.contains(&d.y));
+
+    // filter out datums with an x that is not continuously getting smaller (as drawing the series
+    // will explode otherwise)
+    let mut x_before = f64::MAX;
+    let track_in_nm = std::iter::from_fn(move || {
+        for datum in &mut track_in_nm {
+            if datum.x < x_before {
+                x_before = datum.x;
+                return Some(datum);
+            }
+        }
+
+        None
+    });
 
     // draw approach shadow
     chart.draw_series(LineSeries::new(
@@ -264,7 +278,7 @@ pub fn draw_side_view(
         chart.draw_series(LineSeries::new([(0.0, 0.0), (x, y)], color.mix(0.4)))?;
     }
 
-    let track_descent = track
+    let mut track_descent = track
         .datums
         .iter()
         .map(|d| Datum {
@@ -274,6 +288,20 @@ pub fn draw_side_view(
             alt: m_to_ft(d.alt),
         })
         .filter(|d| RANGE_X.contains(&d.x) && SIDE_RANGE_Y.contains(&d.alt));
+
+    // filter out datums with an x that is not continuously getting smaller (as drawing the series
+    // will explode otherwise)
+    let mut x_before = f64::MAX;
+    let track_descent = std::iter::from_fn(move || {
+        for datum in &mut track_descent {
+            if datum.x < x_before {
+                x_before = datum.x;
+                return Some(datum);
+            }
+        }
+
+        None
+    });
 
     // draw approach shadow
     chart.draw_series(LineSeries::new(
