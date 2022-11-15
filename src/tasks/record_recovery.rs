@@ -12,7 +12,10 @@ use serenity::model::channel::Embed;
 use serenity::model::id::UserId;
 use serenity::model::mention::Mention;
 use stubs::common::v0::{initiator, Airbase, Coalition, Initiator};
-use stubs::mission::v0::stream_events_response::{Event, LandEvent, LandingQualityMarkEvent};
+use stubs::mission::v0::stream_events_response::{
+    CrashEvent, DeadEvent, Event, LandEvent, LandingQualityMarkEvent, PlayerLeaveUnitEvent,
+    UnitLostEvent,
+};
 use tacview::record::{self, Color, Coords, GlobalProperty, Property, Record, Tag, Update};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -30,9 +33,9 @@ pub static FILENAME_DATETIME_FORMAT: Lazy<Vec<time::format_description::FormatIt
     });
 
 #[tracing::instrument(
-        skip_all,
-        fields(carrier_name = params.carrier_name, plane_name = params.plane_name)
-    )]
+    skip_all,
+    fields(carrier_name = params.carrier_name, plane_name = params.plane_name)
+)]
 pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error::Error> {
     tracing::debug!("started recording");
 
@@ -159,7 +162,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                 }
             }
 
-            // next event
+            // DCS landing grade
             Either::Right(event) => match event? {
                 (
                     time,
@@ -175,7 +178,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                             }),
                         comment,
                     }),
-                ) if plane.name == params.plane_name && carrier.name == params.carrier_name => {
+                ) if plane.id == params.plane_id && carrier.id == params.carrier_id => {
                     tracing::info!(%comment, "landing quality mark event");
                     datums.set_dcs_grading(comment.clone());
                     recording.write(Record::Frame(time))?;
@@ -226,6 +229,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                     })?;
                 }
 
+                // DCS land event
                 (
                     time,
                     Event::Land(LandEvent {
@@ -239,7 +243,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                                 ..
                             }),
                     }),
-                ) if plane.name == params.plane_name && carrier.name == params.carrier_name => {
+                ) if plane.id == params.plane_id && carrier.id == params.carrier_id => {
                     tracing::info!("land event");
                     recording.write(Record::Frame(time))?;
 
@@ -293,6 +297,38 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
 
                     // don't stop right away, track a couple of more seconds
                     track_stopped = Some(Instant::now());
+                }
+
+                // Any event indicating that either the carrier or plane do not exist anymore
+                (
+                    _,
+                    Event::Crash(CrashEvent {
+                        initiator:
+                            Some(Initiator {
+                                initiator: Some(initiator::Initiator::Unit(unit)),
+                            }),
+                    })
+                    | Event::Dead(DeadEvent {
+                        initiator:
+                            Some(Initiator {
+                                initiator: Some(initiator::Initiator::Unit(unit)),
+                            }),
+                    })
+                    | Event::PlayerLeaveUnit(PlayerLeaveUnitEvent {
+                        initiator:
+                            Some(Initiator {
+                                initiator: Some(initiator::Initiator::Unit(unit)),
+                            }),
+                    })
+                    | Event::UnitLost(UnitLostEvent {
+                        initiator:
+                            Some(Initiator {
+                                initiator: Some(initiator::Initiator::Unit(unit)),
+                            }),
+                    }),
+                ) if unit.id == params.plane_id || unit.id == params.carrier_id => {
+                    tracing::info!("stop (either carrier or plane despawned)");
+                    return Ok(());
                 }
 
                 _ => {}

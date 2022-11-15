@@ -144,8 +144,8 @@ async fn run(
     )
     .await?;
 
-    let mut planes: HashMap<String, (String, &'static AirplaneInfo)> = HashMap::new();
-    let mut carriers: HashMap<String, &'static CarrierInfo> = HashMap::new();
+    let mut planes: HashMap<String, (u32, String, &'static AirplaneInfo)> = HashMap::new();
+    let mut carriers: HashMap<String, (u32, &'static CarrierInfo)> = HashMap::new();
 
     for units in group_units {
         for unit in units {
@@ -154,13 +154,14 @@ async fn run(
                     planes.insert(
                         unit.name,
                         (
+                            unit.id,
                             unit.player_name.unwrap_or_else(|| String::from("KI")),
                             plane_info,
                         ),
                     );
                 }
                 Some(Candidate::Carrier(carrier_info)) => {
-                    carriers.insert(unit.name, carrier_info);
+                    carriers.insert(unit.name, (unit.id, carrier_info));
                 }
                 None => {}
             }
@@ -172,8 +173,10 @@ async fn run(
     let discord_webhook = opts.discord_webhook.clone();
     let tx2 = tx.clone();
     let spawn_detect_recovery_attempt =
-        move |carrier_name: String,
+        move |carrier_id: u32,
+              carrier_name: String,
               carrier_info: &'static CarrierInfo,
+              plane_id: u32,
               plane_name: String,
               plane_info: &'static AirplaneInfo,
               pilot_name: String| {
@@ -190,7 +193,9 @@ async fn run(
                         discord_webhook,
                         users,
                         ch: channel,
+                        carrier_id,
                         carrier_name: &carrier_name,
+                        plane_id,
                         plane_name: &plane_name,
                         pilot_name: &pilot_name,
                         carrier_info,
@@ -204,11 +209,13 @@ async fn run(
             });
         };
 
-    for (carrier_name, carrier_info) in &carriers {
-        for (plane_name, (pilot_name, plane_info)) in &planes {
+    for (carrier_name, (carrier_id, carrier_info)) in &carriers {
+        for (plane_name, (plane_id, pilot_name, plane_info)) in &planes {
             spawn_detect_recovery_attempt(
+                *carrier_id,
                 carrier_name.clone(),
                 carrier_info,
+                *plane_id,
                 plane_name.clone(),
                 plane_info,
                 pilot_name.clone(),
@@ -246,10 +253,12 @@ async fn run(
             {
                 match check_candidate(&mut unit_svc, &unit, include_ki).await {
                     Ok(Some(Candidate::Plane(plane_info))) => {
-                        for (carrier_name, carrier_info) in &carriers {
+                        for (carrier_name, (carrier_id, carrier_info)) in &carriers {
                             spawn_detect_recovery_attempt(
+                                *carrier_id,
                                 carrier_name.clone(),
                                 carrier_info,
+                                unit.id,
                                 unit.name.clone(),
                                 plane_info,
                                 unit.player_name
@@ -259,10 +268,12 @@ async fn run(
                         }
                     }
                     Ok(Some(Candidate::Carrier(carrier_info))) => {
-                        for (plane_name, (pilot_name, plane_info)) in &planes {
+                        for (plane_name, (plane_id, pilot_name, plane_info)) in &planes {
                             spawn_detect_recovery_attempt(
+                                unit.id,
                                 unit.name.clone(),
                                 carrier_info,
+                                *plane_id,
                                 plane_name.clone(),
                                 plane_info,
                                 pilot_name.clone(),
