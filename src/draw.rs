@@ -24,9 +24,11 @@ const THEME_GUIDE_YELLOW: RGBColor = RGBColor(254, 240, 138); // FEF08A
 const THEME_GUIDE_GREEN: RGBColor = RGBColor(34, 197, 94); // 22C55E
 const THEME_GUIDE_GRAY: RGBColor = RGBColor(100, 116, 139); // 64748B
 
-const THEME_TRACK_RED: RGBColor = RGBColor(239, 68, 68); // EF4444
-const THEME_TRACK_YELLOW: RGBColor = RGBColor(254, 240, 138); // FEF08A
-const THEME_TRACK_GREEN: RGBColor = RGBColor(34, 197, 94); // 22C55E
+const THEME_AOA_FAST: RGBColor = RGBColor(34, 197, 94); // 22C55E
+const THEME_AOA_SLIGHTLY_FAST: RGBColor = RGBColor(170, 197, 34); // AAC522
+const THEME_AOA_ON_SPEED: RGBColor = RGBColor(254, 240, 138); // FEF08A
+const THEME_AOA_SLIGHTLY_SLOW: RGBColor = RGBColor(239, 165, 68); // EFA544
+const THEME_AOA_SLOW: RGBColor = RGBColor(239, 68, 68); // EF4444
 
 const WIDTH: u32 = 1000;
 const X_LABEL_AREA_SIZE: u32 = 30;
@@ -187,7 +189,7 @@ pub fn draw_top_view(
 
     // draw approach
     let mut points = Vec::new();
-    let mut color = THEME_TRACK_GREEN;
+    let mut color = THEME_AOA_ON_SPEED;
     for datum in track_in_nm {
         let next_color = aoa_color(datum.aoa);
         let point = (datum.x, datum.y);
@@ -311,7 +313,7 @@ pub fn draw_side_view(
 
     // draw approach
     let mut points = Vec::new();
-    let mut color = THEME_TRACK_GREEN;
+    let mut color = THEME_AOA_ON_SPEED;
     for datum in track_descent {
         let next_color = aoa_color(datum.aoa);
 
@@ -354,19 +356,19 @@ fn aoa_color(aoa: f64) -> RGBColor {
     // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
     if aoa <= 6.9 {
         // fast
-        THEME_TRACK_RED
+        THEME_AOA_FAST
     } else if aoa <= 7.4 {
         // slightly fast
-        THEME_TRACK_YELLOW
+        THEME_AOA_SLIGHTLY_FAST
     } else if aoa < 8.8 {
         // on speed
-        THEME_TRACK_GREEN
+        THEME_AOA_ON_SPEED
     } else if aoa < 9.3 {
         // slightly slow
-        THEME_TRACK_YELLOW
+        THEME_AOA_SLIGHTLY_SLOW
     } else {
         // slow
-        THEME_TRACK_RED
+        THEME_AOA_SLOW
     }
 }
 
