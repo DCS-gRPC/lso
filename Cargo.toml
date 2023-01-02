@@ -28,9 +28,8 @@ zip = "0.6"
 
 [dependencies.stubs]
 package = "dcs-grpc-stubs"
-# path = "../DCS-gRPC/rust-server/stubs"
 git = "https://github.com/DCS-gRPC/rust-server.git"
-rev = "78244b58b882af666cedc2f92dac57b6668b2b07"
+rev = "0.7.0"
 features = ["client"]
 
 [dev-dependencies]
