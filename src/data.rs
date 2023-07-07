@@ -141,6 +141,7 @@ static FA18C: AirplaneInfo = AirplaneInfo {
         z: -7.237348,
     },
     glide_slope: 3.5,
+    plane_type: "FA18C",
 };
 
 static F14: AirplaneInfo = AirplaneInfo {
@@ -150,6 +151,7 @@ static F14: AirplaneInfo = AirplaneInfo {
         z: -6.563727,
     },
     glide_slope: 3.5,
+    plane_type: "F14",
 };
 
 static T45: AirplaneInfo = AirplaneInfo {
@@ -159,6 +161,7 @@ static T45: AirplaneInfo = AirplaneInfo {
         z: -4.782536,
     },
     glide_slope: 3.5,
+    plane_type: "T45",
 };
 
 #[derive(Debug)]
@@ -204,6 +207,8 @@ pub struct AirplaneInfo {
     pub hook: DVec3,
     /// The optimal glide slope in degrees.
     pub glide_slope: f64,
+    /// The type of aircraft used to select proper on speed color.
+    pub plane_type: &'static str,
 }
 
 impl AirplaneInfo {

@@ -41,6 +41,7 @@ pub struct TrackResult {
     pub grading: Grading,
     pub dcs_grading: Option<String>,
     pub datums: Vec<Datum>,
+    pub plane_type: &'static str,
 }
 
 impl Track {
@@ -161,6 +162,7 @@ impl Track {
             grading,
             dcs_grading: self.dcs_grading,
             datums: self.datums,
+            plane_type: self.plane_info.plane_type,
         }
     }
 

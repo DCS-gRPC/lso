@@ -191,7 +191,7 @@ pub fn draw_top_view(
     let mut points = Vec::new();
     let mut color = THEME_AOA_ON_SPEED;
     for datum in track_in_nm {
-        let next_color = aoa_color(datum.aoa);
+        let next_color = aoa_color(datum.aoa, track.plane_type);
         let point = (datum.x, datum.y);
 
         if points.is_empty() {
@@ -315,7 +315,7 @@ pub fn draw_side_view(
     let mut points = Vec::new();
     let mut color = THEME_AOA_ON_SPEED;
     for datum in track_descent {
-        let next_color = aoa_color(datum.aoa);
+        let next_color = aoa_color(datum.aoa, track.plane_type);
 
         let point = (datum.x, datum.alt);
 
@@ -352,23 +352,63 @@ fn text_style() -> TextStyle<'static> {
     TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG)
 }
 
-fn aoa_color(aoa: f64) -> RGBColor {
-    // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
-    if aoa <= 6.9 {
-        // fast
-        THEME_AOA_FAST
-    } else if aoa <= 7.4 {
-        // slightly fast
-        THEME_AOA_SLIGHTLY_FAST
-    } else if aoa < 8.8 {
-        // on speed
-        THEME_AOA_ON_SPEED
-    } else if aoa < 9.3 {
-        // slightly slow
-        THEME_AOA_SLIGHTLY_SLOW
+fn aoa_color(aoa: f64, plane_type: &'static str) -> RGBColor {
+    if plane_type == "F14" {
+        // https://www.heatblur.se/F-14Manual/cockpit.html?highlight=aoa#approach-indexer
+        if aoa <= 14.0 {
+            // fast
+            THEME_AOA_FAST
+        } else if aoa <= 14.5 {
+            // slightly fast
+            THEME_AOA_SLIGHTLY_FAST
+        } else if aoa < 15.5 {
+            // on speed
+            THEME_AOA_ON_SPEED
+        } else if aoa < 16.0 {
+            // slightly slow
+            THEME_AOA_SLIGHTLY_SLOW
+        } else {
+            // slow
+            THEME_AOA_SLOW
+        }
+    } else if plane_type == "T45" {
+        // http://www.fsx-info.de/dateien/t45-manual.pdf
+        // page 44
+        if aoa <= 16.0 {
+            // fast
+            THEME_AOA_FAST
+        } else if aoa <= 16.5 {
+            // slightly fast
+            THEME_AOA_SLIGHTLY_FAST
+        } else if aoa < 17.0 {
+            // on speed
+            THEME_AOA_ON_SPEED
+        } else if aoa < 17.5 {
+            // slightly slow
+            THEME_AOA_SLIGHTLY_SLOW
+        } else {
+            // slow
+            THEME_AOA_SLOW
+        }
     } else {
-        // slow
-        THEME_AOA_SLOW
+        // default to FA18C
+        // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
+        if aoa <= 6.9 {
+            // fast
+            THEME_AOA_FAST
+        } else if aoa <= 7.4 {
+            // slightly fast
+            THEME_AOA_SLIGHTLY_FAST
+        } else if aoa < 8.8 {
+            // on speed
+            THEME_AOA_ON_SPEED
+        } else if aoa < 9.3 {
+            // slightly slow
+            THEME_AOA_SLIGHTLY_SLOW
+        } else {
+            // slow
+            THEME_AOA_SLOW
+        }
     }
 }
 
