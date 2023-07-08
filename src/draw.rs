@@ -354,36 +354,19 @@ fn text_style() -> TextStyle<'static> {
 
 fn aoa_color(aoa: f64, plane_type: &'static str) -> RGBColor {
     if plane_type == "F14" {
-        // https://www.heatblur.se/F-14Manual/cockpit.html?highlight=aoa#approach-indexer
-        if aoa <= 14.0 {
+        // https://www.heatblur.se/F-14Manual/cockpit.html?highlight=aoa#approach-indexer\
+        // aoa degrees for tomcat calculated by degrees=((units/1.0989) - 3.01) from units in manual based off conversation found here:
+        // https://forum.dcs.world/topic/228893-aoa-units-to-degrees-conversion/#:~:text=Which%20makes%20around%201%20unit%3D1%2C67%20degrees.
+        if aoa <= 9.7 {
             // fast
             THEME_AOA_FAST
-        } else if aoa <= 14.5 {
+        } else if aoa <= 10.2 {
             // slightly fast
             THEME_AOA_SLIGHTLY_FAST
-        } else if aoa < 15.5 {
+        } else if aoa < 11.0 {
             // on speed
             THEME_AOA_ON_SPEED
-        } else if aoa < 16.0 {
-            // slightly slow
-            THEME_AOA_SLIGHTLY_SLOW
-        } else {
-            // slow
-            THEME_AOA_SLOW
-        }
-    } else if plane_type == "T45" {
-        // http://www.fsx-info.de/dateien/t45-manual.pdf
-        // page 44
-        if aoa <= 16.0 {
-            // fast
-            THEME_AOA_FAST
-        } else if aoa <= 16.5 {
-            // slightly fast
-            THEME_AOA_SLIGHTLY_FAST
-        } else if aoa < 17.0 {
-            // on speed
-            THEME_AOA_ON_SPEED
-        } else if aoa < 17.5 {
+        } else if aoa < 11.6 {
             // slightly slow
             THEME_AOA_SLIGHTLY_SLOW
         } else {
