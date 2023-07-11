@@ -37,11 +37,10 @@ pub enum Grading {
 #[derive(Debug, PartialEq)]
 pub struct TrackResult {
     pub pilot_name: String,
-    pub glide_slope: f64,
     pub grading: Grading,
     pub dcs_grading: Option<String>,
     pub datums: Vec<Datum>,
-    pub plane_type: &'static str,
+    pub plane_info: &'static AirplaneInfo,
 }
 
 impl Track {
@@ -158,11 +157,10 @@ impl Track {
 
         TrackResult {
             pilot_name: self.pilot_name,
-            glide_slope: self.plane_info.glide_slope,
             grading,
             dcs_grading: self.dcs_grading,
             datums: self.datums,
-            plane_type: self.plane_info.plane_type,
+            plane_info: self.plane_info,
         }
     }
 

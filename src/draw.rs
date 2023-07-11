@@ -13,6 +13,7 @@ use plotters::style::{Color, IntoFont, RGBColor, TextStyle};
 use plotters_bitmap::bitmap_pixel::RGBPixel;
 use plotters_bitmap::BitMapBackend;
 
+use crate::data::{AirplaneInfo, Aoa};
 use crate::track::{Datum, Grading, TrackResult};
 use crate::utils::{ft_to_nm, m_to_ft, m_to_nm, nm_to_ft, nm_to_m};
 
@@ -191,7 +192,7 @@ pub fn draw_top_view(
     let mut points = Vec::new();
     let mut color = THEME_AOA_ON_SPEED;
     for datum in track_in_nm {
-        let next_color = aoa_color(datum.aoa, track.plane_type);
+        let next_color = aoa_color(datum.aoa, track.plane_info);
         let point = (datum.x, datum.y);
 
         if points.is_empty() {
@@ -261,13 +262,13 @@ pub fn draw_side_view(
 
     // draw centerline
     let lines = [
-        (track.glide_slope - 0.9, THEME_GUIDE_RED),
-        (track.glide_slope - 0.6, THEME_GUIDE_YELLOW),
-        (track.glide_slope - 0.25, THEME_GUIDE_GREEN),
-        (track.glide_slope, THEME_GUIDE_GRAY),
-        (track.glide_slope + 0.25, THEME_GUIDE_GREEN),
-        (track.glide_slope + 0.7, THEME_GUIDE_YELLOW),
-        (track.glide_slope + 1.5, THEME_GUIDE_RED),
+        (track.plane_info.glide_slope - 0.9, THEME_GUIDE_RED),
+        (track.plane_info.glide_slope - 0.6, THEME_GUIDE_YELLOW),
+        (track.plane_info.glide_slope - 0.25, THEME_GUIDE_GREEN),
+        (track.plane_info.glide_slope, THEME_GUIDE_GRAY),
+        (track.plane_info.glide_slope + 0.25, THEME_GUIDE_GREEN),
+        (track.plane_info.glide_slope + 0.7, THEME_GUIDE_YELLOW),
+        (track.plane_info.glide_slope + 1.5, THEME_GUIDE_RED),
     ];
 
     for (deg, color) in lines {
@@ -315,7 +316,7 @@ pub fn draw_side_view(
     let mut points = Vec::new();
     let mut color = THEME_AOA_ON_SPEED;
     for datum in track_descent {
-        let next_color = aoa_color(datum.aoa, track.plane_type);
+        let next_color = aoa_color(datum.aoa, track.plane_info);
 
         let point = (datum.x, datum.alt);
 
@@ -352,47 +353,57 @@ fn text_style() -> TextStyle<'static> {
     TextStyle::from(("sans-serif", 20).into_font()).color(&THEME_FG)
 }
 
-fn aoa_color(aoa: f64, plane_type: &'static str) -> RGBColor {
-    if plane_type == "F14" {
-        // https://www.heatblur.se/F-14Manual/cockpit.html?highlight=aoa#approach-indexer
-        // aoa degrees for tomcat calculated by degrees=((units/1.0989) - 3.01) from units in manual based off conversation found here:
-        // https://forum.dcs.world/topic/228893-aoa-units-to-degrees-conversion/#:~:text=Which%20makes%20around%201%20unit%3D1%2C67%20degrees.
-        if aoa <= 9.7 {
-            // fast
-            THEME_AOA_FAST
-        } else if aoa <= 10.2 {
-            // slightly fast
-            THEME_AOA_SLIGHTLY_FAST
-        } else if aoa < 11.1 {
-            // on speed
-            THEME_AOA_ON_SPEED
-        } else if aoa < 11.6 {
-            // slightly slow
-            THEME_AOA_SLIGHTLY_SLOW
-        } else {
-            // slow
-            THEME_AOA_SLOW
-        }
-    } else {
-        // default to FA18C
-        // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
-        if aoa <= 6.9 {
-            // fast
-            THEME_AOA_FAST
-        } else if aoa <= 7.4 {
-            // slightly fast
-            THEME_AOA_SLIGHTLY_FAST
-        } else if aoa < 8.8 {
-            // on speed
-            THEME_AOA_ON_SPEED
-        } else if aoa < 9.3 {
-            // slightly slow
-            THEME_AOA_SLIGHTLY_SLOW
-        } else {
-            // slow
-            THEME_AOA_SLOW
-        }
+fn aoa_color(aoa: f64, plane_info: &'static AirplaneInfo) -> RGBColor {
+    match (plane_info.aoa_rating)(aoa) {
+        Aoa::Fast => THEME_AOA_FAST,
+        Aoa::SlightlyFast => THEME_AOA_SLIGHTLY_FAST,
+        Aoa::OnSpeed => THEME_AOA_ON_SPEED,
+        Aoa::SlightlySlow => THEME_AOA_SLIGHTLY_SLOW,
+        Aoa::Slow => THEME_AOA_SLOW,
     }
+
+    /*
+    if plane_type == "F14" {
+            // https://www.heatblur.se/F-14Manual/cockpit.html?highlight=aoa#approach-indexer
+            // aoa degrees for tomcat calculated by degrees=((units/1.0989) - 3.01) from units in manual based off conversation found here:
+            // https://forum.dcs.world/topic/228893-aoa-units-to-degrees-conversion/#:~:text=Which%20makes%20around%201%20unit%3D1%2C67%20degrees.
+            if aoa <= 9.7 {
+                // fast
+                THEME_AOA_FAST
+            } else if aoa <= 10.2 {
+                // slightly fast
+                THEME_AOA_SLIGHTLY_FAST
+            } else if aoa < 11.1 {
+                // on speed
+                THEME_AOA_ON_SPEED
+            } else if aoa < 11.6 {
+                // slightly slow
+                THEME_AOA_SLIGHTLY_SLOW
+            } else {
+                // slow
+                THEME_AOA_SLOW
+            }
+        } else {
+            // default to FA18C
+            // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
+            if aoa <= 6.9 {
+                // fast
+                THEME_AOA_FAST
+            } else if aoa <= 7.4 {
+                // slightly fast
+                THEME_AOA_SLIGHTLY_FAST
+            } else if aoa < 8.8 {
+                // on speed
+                THEME_AOA_ON_SPEED
+            } else if aoa < 9.3 {
+                // slightly slow
+                THEME_AOA_SLIGHTLY_SLOW
+            } else {
+                // slow
+                THEME_AOA_SLOW
+            }
+        }
+        */
 }
 
 struct CustomRange(WithKeyPoints<RangedCoordf64>);

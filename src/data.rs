@@ -141,7 +141,20 @@ static FA18C: AirplaneInfo = AirplaneInfo {
         z: -7.237348,
     },
     glide_slope: 3.5,
-    plane_type: "FA18C",
+    aoa_rating: |aoa: f64| -> Aoa {
+        // https://forums.vrsimulations.com/support/index.php/Navigation_Tutorial_Flight#Angle_of_Attack_Bracket
+        if aoa <= 6.9 {
+            Aoa::Fast
+        } else if aoa <= 7.4 {
+            Aoa::SlightlyFast
+        } else if aoa < 8.8 {
+            Aoa::OnSpeed
+        } else if aoa < 9.3 {
+            Aoa::SlightlySlow
+        } else {
+            Aoa::Slow
+        }
+    },
 };
 
 static F14: AirplaneInfo = AirplaneInfo {
@@ -151,7 +164,22 @@ static F14: AirplaneInfo = AirplaneInfo {
         z: -6.563727,
     },
     glide_slope: 3.5,
-    plane_type: "F14",
+    aoa_rating: |aoa: f64| -> Aoa {
+        // https://www.heatblur.se/F-14Manual/cockpit.html?highlight=aoa#approach-indexer
+        // aoa degrees for tomcat calculated by degrees=((units/1.0989) - 3.01) from units in manual based off conversation found here:
+        // https://forum.dcs.world/topic/228893-aoa-units-to-degrees-conversion/#:~:text=Which%20makes%20around%201%20unit%3D1%2C67%20degrees.
+        if aoa <= 9.7 {
+            Aoa::Fast
+        } else if aoa <= 10.2 {
+            Aoa::SlightlyFast
+        } else if aoa < 11.1 {
+            Aoa::OnSpeed
+        } else if aoa < 11.6 {
+            Aoa::SlightlySlow
+        } else {
+            Aoa::Slow
+        }
+    },
 };
 
 static T45: AirplaneInfo = AirplaneInfo {
@@ -161,7 +189,20 @@ static T45: AirplaneInfo = AirplaneInfo {
         z: -4.782536,
     },
     glide_slope: 3.5,
-    plane_type: "T45",
+    aoa_rating: |aoa: f64| -> Aoa {
+        // same as FA18C, so potentially wrong
+        if aoa <= 6.9 {
+            Aoa::Fast
+        } else if aoa <= 7.4 {
+            Aoa::SlightlyFast
+        } else if aoa < 8.8 {
+            Aoa::OnSpeed
+        } else if aoa < 9.3 {
+            Aoa::SlightlySlow
+        } else {
+            Aoa::Slow
+        }
+    },
 };
 
 #[derive(Debug)]
@@ -202,13 +243,22 @@ impl CarrierInfo {
 }
 
 #[derive(Debug)]
+pub enum Aoa {
+    Fast,
+    SlightlyFast,
+    OnSpeed,
+    SlightlySlow,
+    Slow,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct AirplaneInfo {
     /// Hook position relative to the object's origin.
     pub hook: DVec3,
     /// The optimal glide slope in degrees.
     pub glide_slope: f64,
-    /// The type of aircraft used to select proper on speed color.
-    pub plane_type: &'static str,
+    /// A function that returns its current AOA rating.
+    pub aoa_rating: fn(aoa: f64) -> Aoa,
 }
 
 impl AirplaneInfo {
