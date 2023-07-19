@@ -241,7 +241,7 @@ impl CarrierPlanePair {
     }
 
     fn update(&mut self, time: f64, update: &Update) {
-        let (mut transform, is_plane) = if update.id == self.carrier_id {
+        let (transform, is_plane) = if update.id == self.carrier_id {
             (&mut self.carrier, false)
         } else if update.id == self.plane_id {
             (&mut self.plane, true)
