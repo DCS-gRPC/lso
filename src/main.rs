@@ -22,6 +22,9 @@ struct Opts {
     /// A level of verbosity, and can be used multiple times
     #[clap(short, long, action = ArgAction::Count)]
     verbose: u8,
+    /// Enable colorized output
+    #[clap(long)]
+    color: bool,
     #[clap(subcommand)]
     command: Command,
 }
@@ -48,7 +51,7 @@ async fn main() {
         .with(filter::filter_fn(move |m| {
             m.target().starts_with("lso") && m.level() <= &max_level
         }))
-        .with(fmt::layer())
+        .with(fmt::layer().with_ansi(opts.color))
         .init();
 
     // shutdown gracefully on CTRL+C
