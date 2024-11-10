@@ -7,13 +7,13 @@ use futures_util::future::Either;
 use futures_util::stream::select;
 use futures_util::StreamExt;
 use once_cell::sync::Lazy;
+use serenity::builder::{CreateAttachment, CreateEmbed, ExecuteWebhook};
 use serenity::http::Http;
-use serenity::model::channel::Embed;
 use serenity::model::id::UserId;
 use serenity::model::mention::Mention;
 use stubs::common::v0::{initiator, Airbase, Coalition, Initiator};
 use stubs::mission::v0::stream_events_response::{
-    CrashEvent, DeadEvent, Event, LandEvent, LandingQualityMarkEvent, PlayerLeaveUnitEvent,
+    CrashEvent, DeadEvent, Event, LandingQualityMarkEvent, PlayerLeaveUnitEvent, RunwayTouchEvent,
     UnitLostEvent,
 };
 use tacview::record::{self, Color, Coords, GlobalProperty, Property, Record, Tag, Update};
@@ -235,7 +235,7 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
                 // DCS land event
                 (
                     time,
-                    Event::Land(LandEvent {
+                    Event::RunwayTouch(RunwayTouchEvent {
                         initiator:
                             Some(Initiator {
                                 initiator: Some(initiator::Initiator::Unit(plane)),
@@ -357,41 +357,37 @@ pub async fn record_recovery(params: TaskParams<'_>) -> Result<(), crate::error:
         let http = Http::new("token");
         let webhook = http.get_webhook_from_url(discord_webhook).await?;
 
-        let embed = Embed::fake(|e| {
-            let e = e
-                .field(
-                    "Pilot",
-                    params
-                        .users
-                        .get(params.pilot_name)
-                        .map(|id| Cow::Owned(Mention::from(UserId(*id)).to_string()))
-                        .unwrap_or(Cow::Borrowed(params.pilot_name)),
-                    true,
-                )
-                .field(
-                    "Grading",
-                    match track.grading {
-                        Grading::Unknown => Cow::Borrowed("unknown"),
-                        Grading::Bolter => Cow::Borrowed("Bolter"),
-                        Grading::Recovered { cable, .. } => cable
-                            .map(|c| Cow::Owned(format!("#{}", c)))
-                            .unwrap_or(Cow::Borrowed("-")),
-                    },
-                    true,
-                );
-            if let Some(dcs_grading) = track.dcs_grading {
-                e.field("DCS LSO", dcs_grading, true)
-            } else {
-                e
-            }
-        });
+        let embed = CreateEmbed::new()
+            .field(
+                "Pilot",
+                params
+                    .users
+                    .get(params.pilot_name)
+                    .map(|id| Cow::Owned(Mention::from(UserId::new(*id)).to_string()))
+                    .unwrap_or(Cow::Borrowed(params.pilot_name)),
+                true,
+            )
+            .field(
+                "Grading",
+                match track.grading {
+                    Grading::Unknown => Cow::Borrowed("unknown"),
+                    Grading::Bolter => Cow::Borrowed("Bolter"),
+                    Grading::Recovered { cable, .. } => cable
+                        .map(|c| Cow::Owned(format!("#{}", c)))
+                        .unwrap_or(Cow::Borrowed("-")),
+                },
+                true,
+            );
 
         webhook
-            .execute(&http, false, |w| {
-                w.embeds(vec![embed])
-                    .add_file(&chart_path)
-                    .add_file(&acmi_path)
-            })
+            .execute(
+                &http,
+                false,
+                ExecuteWebhook::new()
+                    .embeds(vec![embed])
+                    .add_file(CreateAttachment::path(&chart_path).await?)
+                    .add_file(CreateAttachment::path(&acmi_path).await?),
+            )
             .await?;
     }
 
@@ -406,7 +402,7 @@ async fn create_initial_update(
     let unit = client.get_unit(unit_name).await?;
     let attrs = client.get_descriptor(unit_name).await?;
 
-    let coalition = Coalition::from_i32(unit.coalition).unwrap_or(Coalition::Neutral);
+    let coalition = Coalition::try_from(unit.coalition).unwrap_or(Coalition::Neutral);
     let mut props = vec![
         Property::Type(tags(attrs)),
         Property::Name(unit.r#type),

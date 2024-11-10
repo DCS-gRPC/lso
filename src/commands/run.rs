@@ -123,7 +123,7 @@ async fn run(
         groups
             .into_iter()
             .filter(|group| {
-                if let Some(category) = GroupCategory::from_i32(group.category) {
+                if let Ok(category) = GroupCategory::try_from(group.category) {
                     matches!(category, GroupCategory::Airplane | GroupCategory::Ship)
                 } else {
                     false
@@ -310,11 +310,11 @@ async fn check_candidate(
     unit: &common::v0::Unit,
     include_ki: bool,
 ) -> Result<Option<Candidate>, Status> {
-    match GroupCategory::from_i32(unit.group.as_ref().map(|g| g.category).unwrap_or(-1)) {
-        Some(GroupCategory::Airplane) if unit.player_name.is_some() || include_ki => {
+    match GroupCategory::try_from(unit.group.as_ref().map(|g| g.category).unwrap_or(-1)) {
+        Ok(GroupCategory::Airplane) if unit.player_name.is_some() || include_ki => {
             return Ok(AirplaneInfo::by_type(&unit.r#type).map(Candidate::Plane))
         }
-        Some(GroupCategory::Ship) => {
+        Ok(GroupCategory::Ship) => {
             let attrs = svc
                 .get_descriptor(unit::v0::GetDescriptorRequest {
                     name: unit.name.clone(),

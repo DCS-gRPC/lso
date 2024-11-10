@@ -14,22 +14,28 @@ pin-project = "1.0"
 plotters = "0.3"
 plotters-bitmap = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
-serenity = "0.11"
-tacview = { version = "0.1" }
-thiserror = "1.0"
+serde_json = "1.0"
+serenity = "0.12"
+tacview = "0.2"
+thiserror = "2.0"
 time = { version = "0.3", features = ["local-offset", "formatting", "parsing"] }
-tokio =  { version = "1.2", features = ["rt-multi-thread", "macros", "signal", "fs", "sync"] }
-tonic = "0.8"
+tokio = { version = "1.2", features = [
+    "rt-multi-thread",
+    "macros",
+    "signal",
+    "fs",
+    "sync",
+] }
+tonic = "0.11"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 ultraviolet = { version = "0.9", features = ["f64"] }
-zip = "0.6"
+zip = "2.2"
 
 [dependencies.stubs]
 package = "dcs-grpc-stubs"
 git = "https://github.com/DCS-gRPC/rust-server.git"
-rev = "0.7.0"
+rev = "0.8.1"
 features = ["client"]
 
 [dev-dependencies]
